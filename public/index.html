@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Матч-центр АПЛ VK</title>
+<title>Матч-центр | Английский футбол</title>
 <style>
   :root {
     --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #262b36;
@@ -21,8 +21,8 @@
 
   header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 14px; }
   .top { display: flex; align-items: center; gap: 12px; }
-  .top h1 { font-size: 18px; margin: 0; white-space: nowrap; }
-  .tracked { display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap; }
+  .top h1 { font-size: 18px; margin: 0; flex: 1; }
+  .tracked { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; }
   .tracked img { width: 22px; height: 22px; object-fit: contain; }
   .vkstate { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
@@ -109,12 +109,12 @@
 <div class="wrap">
   <header>
     <div class="top">
-      <h1>Матч-центр АПЛ VK</h1>
-      <span class="tracked" id="tracked"></span>
+      <h1>Матч-центр | Английский футбол</h1>
       <span class="vkstate" id="vkstate"><span class="dot"></span>VK</span>
       <button id="theme" title="Тема">◐</button>
       <button id="reload" title="Обновить">↻</button>
     </div>
+    <div class="tracked" id="tracked"></div>
     <div class="dates" id="dates"></div>
     <div class="filters">
       <button class="chip" data-f="streams">Только с трансляцией</button>
