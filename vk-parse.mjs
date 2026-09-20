@@ -18,8 +18,6 @@ export function collectVideos(json, out) {
 const withChannel = (ch) => (s) => ({
   ...s,
   channel: ch.label || ch.screenName,
-  // "embed": false в config.json — у канала закрыто встраивание, показываем подсказку в плеере
-  external: ch.embed === false,
   teams: parseTeams(s.title),
 });
 

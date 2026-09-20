@@ -2,8 +2,8 @@
   "port": 3777,
   "vkRefreshSeconds": 120,
   "channels": [
-    { "screenName": "englishaccent", "label": "Английский Акцент", "embed": false },
-    { "screenName": "pl_forever", "label": "АПЛ Навсегда", "embed": false },
+    { "screenName": "englishaccent", "label": "Английский Акцент" },
+    { "screenName": "pl_forever", "label": "АПЛ Навсегда" },
     { "screenName": "sportcast.online", "label": "Sportcast" },
     { "screenName": "vishli_football", "label": "ВЫШЛИ!" }
   ],
