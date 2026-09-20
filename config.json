@@ -4,7 +4,8 @@
   "channels": [
     { "screenName": "englishaccent", "label": "Английский Акцент", "embed": false },
     { "screenName": "pl_forever", "label": "АПЛ Навсегда", "embed": false },
-    { "screenName": "sportcast.online", "label": "Sportcast" }
+    { "screenName": "sportcast.online", "label": "Sportcast" },
+    { "screenName": "vishli_football", "label": "ВЫШЛИ!" }
   ],
   "leagues": [47, 48, 132, 133, 247],
   "teamAliases": {
