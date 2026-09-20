@@ -1,0 +1,15 @@
+{
+  "name": "sportcenter",
+  "version": "1.0.0",
+  "description": "Матч-центр: расписание FotMob + трансляции VK",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "postinstall": "playwright install chromium"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.63.0"
+  },
+  "private": true
+}

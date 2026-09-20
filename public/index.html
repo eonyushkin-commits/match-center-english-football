@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Матч-центр</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --line: #262b36;
+    --text: #e8eaef; --muted: #8a93a6; --accent: #00c46a; --live: #ff3b4e; --vk: #0077ff;
+  }
+  :root[data-theme="light"] {
+    --bg: #f2f4f7; --panel: #fff; --panel2: #f6f7f9; --line: #e3e6eb;
+    --text: #151821; --muted: #667085; --accent: #00a85a; --live: #e5263a; --vk: #0066e0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 16px 48px; }
+
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding-top: 14px; }
+  .top { display: flex; align-items: center; gap: 12px; }
+  .top h1 { font-size: 18px; margin: 0; flex: 1; }
+  .vkstate { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--accent); } .dot.bad { background: var(--live); }
+  button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+                 border-radius: 8px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover, .btn:hover { border-color: var(--muted); }
+
+  .dates { display: flex; gap: 6px; overflow-x: auto; padding: 12px 0 8px; scrollbar-width: none; }
+  .dates button { flex: 0 0 auto; min-width: 64px; text-align: center; line-height: 1.2; }
+  .dates button small { display: block; color: var(--muted); font-size: 11px; }
+  .dates button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .dates button.on small { color: #e6fff2; }
+
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-bottom: 12px;
+             border-bottom: 1px solid var(--line); }
+  .chip { border-radius: 999px; font-size: 13px; }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .filters input { flex: 1; min-width: 140px; background: var(--panel); color: var(--text);
+                   border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font: inherit; }
+
+  .notice { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--panel);
+            border: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  .notice b { color: var(--text); }
+
+  .league { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
+            border-radius: 12px; overflow: hidden; }
+  .lhead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--panel2);
+           font-weight: 600; }
+  .lhead img { width: 20px; height: 20px; object-fit: contain; }
+  .lhead small { color: var(--muted); font-weight: 400; }
+
+  .match { display: grid; grid-template-columns: 56px 1fr auto; gap: 4px 12px; align-items: center;
+           padding: 10px 12px; border-top: 1px solid var(--line); }
+  .when { color: var(--muted); font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; }
+  .when.live { color: var(--live); font-weight: 700; }
+  .teams { display: grid; gap: 4px; min-width: 0; }
+  .team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .team img { width: 18px; height: 18px; object-fit: contain; flex: 0 0 auto; }
+  .team span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team b { margin-left: auto; font-variant-numeric: tabular-nums; padding-left: 8px; }
+  .team.win span { font-weight: 600; }
+  .fm { color: var(--muted); font-size: 12px; align-self: start; }
+  .fm:hover { color: var(--text); }
+
+  .streams { grid-column: 2 / 4; display: flex; flex-wrap: wrap; gap: 6px; }
+  .stream { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px;
+            border-radius: 999px; border: 1px solid var(--line); background: var(--panel2); }
+  .stream:hover { border-color: var(--vk); }
+  .stream.started { background: var(--live); border-color: var(--live); color: #fff; }
+  .stream .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
+  .stream.started .tag::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+            background: #fff; margin-right: 4px; vertical-align: 1px; animation: pulse 1.2s infinite; }
+  .stream.search { color: var(--muted); border-style: dashed; }
+  .stream.active { border-color: var(--vk); box-shadow: 0 0 0 1px var(--vk); }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  /* плеер раскрывается под строкой матча, как из-под ката */
+  .player { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s cubic-bezier(.2, .8, .2, 1); }
+  .player.open { grid-template-rows: 1fr; }
+  .player > .clip { overflow: hidden; min-height: 0; }
+  .player .inner { padding: 0 12px 14px; opacity: 0; transform: translateY(-16px);
+                   transition: opacity .35s ease, transform .45s cubic-bezier(.2, .8, .2, 1); }
+  .player.open .inner { opacity: 1; transform: none; transition-delay: .08s; }
+  .phead { display: flex; align-items: center; gap: 8px; padding: 10px 0; flex-wrap: wrap; }
+  .phead b { flex: 1; min-width: 0; font-size: 15px; }
+  .phead .x { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-size: 16px; line-height: 1; }
+  .phead .ext { color: var(--muted); font-size: 12px; }
+  .phead .ext:hover { color: var(--text); }
+  /* 16:9, но не выше видимой области под шапкой */
+  .frame { width: min(100%, calc((100svh - 260px) * 16 / 9)); aspect-ratio: 16 / 9; margin: 0 auto;
+           border-radius: 10px; overflow: hidden; background: #000; }
+  .frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  @media (max-width: 520px) {
+    .match { grid-template-columns: 46px 1fr; }
+    .fm { display: none; }
+    .streams { grid-column: 1 / 3; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1>⚽ Матч-центр</h1>
+      <span class="vkstate" id="vkstate"><span class="dot"></span>VK</span>
+      <button id="theme" title="Тема">◐</button>
+      <button id="reload" title="Обновить">↻</button>
+    </div>
+    <div class="dates" id="dates"></div>
+    <div class="filters">
+      <button class="chip" data-f="streams">Только с трансляцией</button>
+      <button class="chip" data-f="live">Идут сейчас</button>
+      <input id="q" type="search" placeholder="Команда или лига">
+    </div>
+  </header>
+  <div id="notice"></div>
+  <main id="list"><div class="empty">Загрузка…</div></main>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const ymd = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+
+function load(key, def) { try { return JSON.parse(localStorage.getItem(key)) ?? def; } catch { return def; } }
+function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }
+
+const state = { date: new Date(), data: null, player: null, matches: new Map(), filters: load('mc-filters', { streams: false, live: false }), q: '' };
+const theme = load('mc-theme', null);
+if (theme) document.documentElement.dataset.theme = theme;
+
+function renderDates() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const html = [];
+  for (let i = -3; i <= 4; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    const label = i === 0 ? 'Сегодня' : i === -1 ? 'Вчера' : i === 1 ? 'Завтра'
+      : d.toLocaleDateString('ru-RU', { weekday: 'short' });
+    const on = ymd(d) === ymd(state.date) ? ' on' : '';
+    html.push(`<button class="${on}" data-d="${d.toISOString()}">${label}<small>${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></button>`);
+  }
+  $('#dates').innerHTML = html.join('');
+}
+
+function renderFilters() {
+  document.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('on', !!state.filters[b.dataset.f]));
+}
+
+const STATUS = { started: 'LIVE', upcoming: 'скоро', waiting: 'скоро', finished: 'запись', failed: 'ошибка' };
+
+function matchRow(m, vk) {
+  const kick = new Date(m.utcTime);
+  const live = m.started && !m.finished && !m.cancelled;
+  const when = m.cancelled ? 'Отмена' : live ? (m.liveTime || 'LIVE') : m.finished ? (m.reason || 'Кон.')
+    : kick.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const showScore = m.started || m.finished;
+  const team = (t, other) => `<div class="team${m.finished && t.score > other.score ? ' win' : ''}">
+      <img loading="lazy" src="https://images.fotmob.com/image_resources/logo/teamlogo/${t.id}_small.png" alt="">
+      <span>${esc(t.name)}</span>${showScore ? `<b>${t.score}</b>` : ''}</div>`;
+
+  const p = state.player;
+  // у канала бывает несколько эфиров на матч (перезапуск) — нумеруем: «Sportcast», «Sportcast 2»
+  const seen = {};
+  const label = (s) => (seen[s.channel] = (seen[s.channel] || 0) + 1) > 1 ? `${s.channel} ${seen[s.channel]}` : s.channel;
+  let streams = m.streams.map((s, i) => `<a class="stream ${s.status}${p && p.mid === m.id && p.i === i ? ' active' : ''}"
+      href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}"${s.external ? '' : ` data-play="${i}"`}>
+      <span class="tag">${STATUS[s.status] || s.status}</span>${esc(label(s))}${s.external ? ' ↗' : ''}</a>`).join('');
+  if (!m.streams.length && !m.finished && !m.cancelled) {
+    const q = encodeURIComponent(`${m.home.name} ${m.away.name}`);
+    streams = `<a class="stream search" href="https://vkvideo.ru/search?q=${q}" target="_blank" rel="noopener">Искать в VK</a>`;
+  }
+  return `<div class="match" data-mid="${m.id}">
+    <div class="when${live ? ' live' : ''}">${esc(when)}</div>
+    <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
+    <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a>
+    ${streams ? `<div class="streams">${streams}</div>` : ''}
+  </div>`;
+}
+
+function render() {
+  const d = state.data;
+  if (!d) return;
+  const { streams, live } = state.filters;
+  const q = state.q.trim().toLowerCase();
+
+  const vk = d.vk;
+  const dot = !vk.ready ? '' : vk.errors.length ? 'bad' : 'ok';
+  const upd = vk.updatedAt ? new Date(vk.updatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+  $('#vkstate').innerHTML = `<span class="dot ${dot}"></span>VK: ${vk.ready ? `${vk.streamCount} эфиров · ${upd}` : 'загрузка…'}`;
+  $('#vkstate').title = vk.channels.map((c) => c.label).join(', ');
+  $('#notice').innerHTML = vk.errors.length
+    ? `<div class="notice"><b>Не удалось прочитать каналы VK:</b> ${vk.errors.map(esc).join('; ')}</div>` : '';
+
+  const leagues = d.leagues.map((lg) => {
+    let ms = lg.matches;
+    if (streams) ms = ms.filter((m) => m.streams.length);
+    if (live) ms = ms.filter((m) => m.started && !m.finished && !m.cancelled);
+    if (q && !`${lg.name} ${lg.country}`.toLowerCase().includes(q))
+      ms = ms.filter((m) => `${m.home.name} ${m.away.name}`.toLowerCase().includes(q));
+    return { ...lg, matches: ms };
+  }).filter((lg) => lg.matches.length);
+
+  state.matches = new Map(leagues.flatMap((lg) => lg.matches.map((m) => [m.id, m])));
+  const playerEl = $('#list .player');
+
+  // Плеер открыт и набор матчей не поменялся — обновляем только строки матчей,
+  // чтобы iframe не перезагружался (перенос iframe в DOM перезапускает видео).
+  const shown = [...document.querySelectorAll('#list .match')].map((el) => Number(el.dataset.mid));
+  const next = leagues.flatMap((lg) => lg.matches.map((m) => m.id));
+  if (playerEl && shown.join() === next.join()) {
+    for (const el of document.querySelectorAll('#list .match'))
+      el.outerHTML = matchRow(state.matches.get(Number(el.dataset.mid)), vk);
+    return;
+  }
+
+  $('#list').innerHTML = leagues.length ? leagues.map((lg) => `<section class="league">
+      <div class="lhead"><img loading="lazy" src="https://images.fotmob.com/image_resources/logo/leaguelogo/${lg.id}.png" alt="">
+        ${esc(lg.name)} <small>${esc(lg.country || '')}</small></div>
+      ${lg.matches.map((m) => matchRow(m, vk)).join('')}
+    </section>`).join('')
+    : `<div class="empty">Нет матчей по выбранным фильтрам</div>`;
+
+  // список перерисован целиком (фильтр, поиск) — возвращаем плеер под его матч, если тот остался
+  if (playerEl) {
+    const row = document.querySelector(`#list .match[data-mid="${state.player.mid}"]`);
+    if (row) row.after(playerEl); else state.player = null;
+  }
+}
+
+// ---------- встроенный плеер ----------
+// Ровно как в официальном коде встраивания VK: oid, id, hash — без hd/autoplay,
+// с ними часть каналов у залогиненного пользователя показывала «Видео недоступно».
+function embedUrl(s) {
+  if (!s.embed) return null;
+  const u = new URL(s.embed);
+  u.searchParams.delete('__ref');
+  return u.href;
+}
+
+function markActive() {
+  document.querySelectorAll('#list .stream.active').forEach((a) => a.classList.remove('active'));
+  const p = state.player;
+  if (p) document.querySelector(`#list .match[data-mid="${p.mid}"] [data-play="${p.i}"]`)?.classList.add('active');
+}
+
+// выравниваем плеер по центру видимой области под липкой шапкой
+function centerPlayer(el) {
+  const head = $('header').getBoundingClientRect().bottom;
+  const r = el.getBoundingClientRect();
+  const free = innerHeight - head;
+  const top = scrollY + r.top - head - Math.max(0, (free - r.height) / 2);
+  scrollTo({ top, behavior: 'smooth' });
+}
+
+function closePlayer() {
+  const el = $('#list .player');
+  state.player = null;
+  markActive();
+  if (!el) return;
+  el.classList.remove('open');
+  el.addEventListener('transitionend', (e) => { if (e.target === el) el.remove(); });
+  setTimeout(() => el.remove(), 700); // если transitionend не придёт
+}
+
+function openPlayer(mid, i) {
+  const m = state.matches.get(mid);
+  const s = m?.streams[i];
+  const src = s && embedUrl(s);
+  if (!src) return false;
+
+  const cur = $('#list .player');
+  // тот же матч — просто переключаем канал
+  if (cur && state.player?.mid === mid) {
+    if (state.player.i === i) { closePlayer(); return true; }
+    state.player = { mid, i };
+    cur.querySelector('iframe').src = src;
+    cur.querySelector('.ext').href = s.url;
+    markActive();
+    return true;
+  }
+  if (cur) { cur.remove(); }
+
+  state.player = { mid, i };
+  const el = document.createElement('div');
+  el.className = 'player';
+  el.innerHTML =`<div class="clip"><div class="inner">
+      <div class="phead"><b>${esc(m.home.name)} — ${esc(m.away.name)}</b>
+        <a class="ext" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть в VK ↗</a>
+        <button class="x" title="Закрыть (Esc)">✕</button></div>
+      <div class="frame"><iframe src="${esc(src)}" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+        allowfullscreen></iframe></div>
+    </div></div>`;
+  document.querySelector(`#list .match[data-mid="${mid}"]`).after(el);
+  markActive();
+  el.querySelector('.x').addEventListener('click', closePlayer);
+  el.addEventListener('transitionend', (e) => {
+    if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
+  return true;
+}
+
+$('#list').addEventListener('click', (e) => {
+  const a = e.target.closest('[data-play]');
+  // Ctrl/Shift/средняя кнопка — как обычная ссылка, в новой вкладке
+  if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+  const mid = Number(a.closest('.match').dataset.mid);
+  if (openPlayer(mid, Number(a.dataset.play))) e.preventDefault();
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.player) closePlayer(); });
+
+let timer;
+async function fetchDay() {
+  clearTimeout(timer);
+  try {
+    const r = await fetch(`/api/day?date=${ymd(state.date)}&tz=${encodeURIComponent(tz)}`);
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    state.data = j;
+    render();
+  } catch (e) {
+    $('#list').innerHTML = `<div class="empty">Не удалось загрузить: ${esc(e.message)}</div>`;
+  }
+  // пока сервер впервые читает каналы VK — спрашиваем чаще
+  timer = setTimeout(fetchDay, state.data && !state.data.vk.ready ? 5e3 : 60e3);
+}
+
+$('#dates').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.date = new Date(b.dataset.d); state.data = null; state.player = null;
+  $('#list').innerHTML = '<div class="empty">Загрузка…</div>';
+  renderDates(); fetchDay();
+});
+document.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => {
+  state.filters[b.dataset.f] = !state.filters[b.dataset.f];
+  save('mc-filters', state.filters); renderFilters(); render();
+}));
+$('#q').addEventListener('input', (e) => { state.q = e.target.value; render(); });
+$('#reload').addEventListener('click', fetchDay);
+$('#theme').addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = cur; save('mc-theme', cur);
+});
+
+renderDates(); renderFilters(); fetchDay();
+</script>
+</body>
+</html>
