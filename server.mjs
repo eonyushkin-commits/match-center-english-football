@@ -74,6 +74,8 @@ async function buildDay(date, tz) {
     });
   return {
     leagues,
+    // все турниры из config.leagues — для логотипов в шапке, даже если сегодня матчей нет
+    tracked: order.map((id) => ({ id, name: ru.TournamentTemplates?.[id] || String(id) })),
     vk: { ready: vk.updatedAt !== null, updatedAt: vk.updatedAt, errors: vk.errors, channels: config.channels, streamCount: vk.streams.length },
   };
 }
