@@ -1,15 +1,50 @@
 {
-  "name": "sportcenter",
+  "name": "match-center-english-football",
   "version": "1.0.0",
-  "description": "Матч-центр: расписание FotMob + трансляции VK",
-  "main": "server.mjs",
+  "description": "Матч-центр по английскому футболу: расписание FotMob и трансляции из VK Видео",
+  "main": "electron/main.cjs",
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node cli.mjs",
+    "app": "electron .",
+    "dist": "electron-builder --win",
     "postinstall": "playwright install chromium"
   },
   "type": "commonjs",
-  "dependencies": {
+  "private": true,
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
     "playwright": "^1.63.0"
   },
-  "private": true
+  "productName": "Матч-центр",
+  "build": {
+    "appId": "ru.sportcenter.matchcenter",
+    "productName": "Матч-центр",
+    "files": [
+      "electron/**",
+      "public/**",
+      "*.mjs",
+      "config.json",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "match-center-${version}-setup.${ext}",
+      "shortcutName": "Матч-центр"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
 }

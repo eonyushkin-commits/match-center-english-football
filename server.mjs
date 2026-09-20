@@ -5,11 +5,12 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { teamNames, matchStreams } from './match.mjs';
-import { startVkPoller } from './vk.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const config = JSON.parse(await readFile(path.join(ROOT, 'config.json'), 'utf8'));
-const PORT = Number(process.env.PORT || config.port || 3777);
+// MC_CONFIG — путь к настройкам: в установленном приложении они лежат в папке пользователя,
+// потому что сам пакет только для чтения
+const CONFIG_PATH = process.env.MC_CONFIG || path.join(ROOT, 'config.json');
+export const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
 
 // ---------- простой кэш ----------
 const cache = new Map();
@@ -37,12 +38,8 @@ async function fotmobMatches(date, tz) {
   return cached(`fm-${date}-${tz}`, 45e3, () => getJson(url));
 }
 
-// ---------- VK ----------
-const vk = startVkPoller(config.channels, (config.vkRefreshSeconds || 120) * 1000,
-  process.env.VK_PROXY || config.vkProxy || null);
-
 // ---------- API ----------
-async function buildDay(date, tz) {
+async function buildDay(vk, date, tz) {
   const [fm, ru] = await Promise.all([fotmobMatches(date, tz), ruNames()]);
   // показываем только лиги из config.leagues, в том же порядке
   const order = config.leagues || [];
@@ -78,35 +75,44 @@ async function buildDay(date, tz) {
   };
 }
 
-const server = http.createServer(async (req, res) => {
-  const u = new URL(req.url, 'http://x');
-  try {
-    if (u.pathname === '/api/day') {
-      const date = /^\d{8}$/.test(u.searchParams.get('date') || '') ? u.searchParams.get('date') : null;
-      if (!date) throw Object.assign(new Error('date=YYYYMMDD'), { code: 400 });
-      const tz = u.searchParams.get('tz') || 'Europe/Moscow';
-      const data = await buildDay(date, tz);
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify(data));
+// vk — снимок эфиров от поллера: { streams, errors, updatedAt }
+export function createServer(vk) {
+  return http.createServer(async (req, res) => {
+    const u = new URL(req.url, 'http://x');
+    try {
+      if (u.pathname === '/api/day') {
+        const date = /^\d{8}$/.test(u.searchParams.get('date') || '') ? u.searchParams.get('date') : null;
+        if (!date) throw Object.assign(new Error('date=YYYYMMDD'), { code: 400 });
+        const tz = u.searchParams.get('tz') || 'Europe/Moscow';
+        const data = await buildDay(vk, date, tz);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify(data));
+      }
+      if (u.pathname === '/api/streams') { // для отладки: все прочитанные эфиры
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify(vk, null, 1));
+      }
+      if (u.pathname === '/' || u.pathname === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(await readFile(path.join(ROOT, 'public', 'index.html')));
+      }
+      res.writeHead(404).end('not found');
+    } catch (e) {
+      console.error(e);
+      res.writeHead(e.code || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: e.message }));
     }
-    if (u.pathname === '/api/streams') { // для отладки: все прочитанные эфиры
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify(vk, null, 1));
-    }
-    if (u.pathname === '/' || u.pathname === '/index.html') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      return res.end(await readFile(path.join(ROOT, 'public', 'index.html')));
-    }
-    res.writeHead(404).end('not found');
-  } catch (e) {
-    console.error(e);
-    res.writeHead(e.code || 500, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: e.message }));
-  }
-});
+  });
+}
 
-// На сервере за nginx: HOST=127.0.0.1, чтобы приложение не было доступно снаружи в обход basic auth
-const HOST = process.env.HOST || undefined;
-server.listen(PORT, HOST, () => {
-  console.log(`Матч-центр: http://${HOST || 'localhost'}:${PORT}`);
-});
+// HOST=127.0.0.1 — чтобы приложение не было доступно снаружи (например, за nginx)
+export function startServer(vk, port = Number(process.env.PORT || config.port || 3777)) {
+  const host = process.env.HOST || undefined;
+  return new Promise((resolve) => {
+    const server = createServer(vk);
+    server.listen(port, host, () => {
+      console.log(`Матч-центр: http://${host || 'localhost'}:${server.address().port}`);
+      resolve(server);
+    });
+  });
+}
