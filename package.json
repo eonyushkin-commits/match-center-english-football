@@ -1,6 +1,6 @@
 {
   "name": "match-center-english-football",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Матч-центр по английскому футболу: расписание FotMob и трансляции из VK Видео",
   "main": "electron/main.cjs",
   "scripts": {
