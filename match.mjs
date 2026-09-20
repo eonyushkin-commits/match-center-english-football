@@ -51,6 +51,7 @@ export function teamNames(team, ru, aliases = {}) {
   return [...new Set(names)];
 }
 const best = (names, s) => Math.max(0, ...names.map((n) => nameScore(n, s)));
+const RANK = { started: 0, upcoming: 1, waiting: 1, finished: 2, failed: 3 };
 
 export function matchStreams(match, homeNames, awayNames, streams) {
   const kickoff = Date.parse(match.status.utcTime);
@@ -65,7 +66,11 @@ export function matchStreams(match, homeNames, awayNames, streams) {
       return { ...s, score: Math.max(straight, swapped) };
     })
     .filter((s) => s.score > 0)
-    .sort((x, y) => y.score - x.score)
+    // Запланированный эфир у завершённого матча — резервный, который так и не запустили
+    // («РЕЗЕРВ. Фулхэм – Манчестер Юнайтед»): смотреть там нечего.
+    .filter((s) => !(match.status.finished && s.status === 'upcoming'))
+    // Порядок: идущие, затем запланированные, затем записи — внутри по времени начала
+    .sort((x, y) => RANK[x.status] - RANK[y.status] || (x.time ?? 0) - (y.time ?? 0) || y.score - x.score)
     .map(({ teams, score, ...s }) => s);
 }
 
