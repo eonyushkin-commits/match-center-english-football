@@ -1,6 +1,6 @@
 // Главный процесс приложения: поднимает локальный сервер, читает эфиры VK своим же окном
 // и показывает матч-центр. Настройки копируются в папку пользователя, чтобы их можно было править.
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, session, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -12,7 +12,22 @@ process.env.MC_CONFIG = userConfig;
 
 const load = (file) => import(pathToFileURL(path.join(ROOT, file)).href);
 
+// Плеер VK встроен в окно приложения и делит с ним сессию. Если войти в VK внутри плеера,
+// VK начинает отвечать «Видео недоступно» на встроенные трансляции. Поэтому при запуске
+// забываем всё, что сохранил VK, — плеер снова открывается как у анонимного зрителя.
+const VK_DOMAIN = /(^|\.)(vk\.com|vk\.ru|vkvideo\.ru|vkuser\.net|okcdn\.ru|vk-portal\.net|mail\.ru)$/;
+const VK_ORIGINS = ['https://vkvideo.ru', 'https://vk.com', 'https://vk.ru', 'https://login.vk.com',
+  'https://login.vk.ru', 'https://id.vk.com', 'https://id.vk.ru'];
+
+async function forgetVk(ses) {
+  const cookies = (await ses.cookies.get({})).filter((c) => VK_DOMAIN.test(c.domain.replace(/^\./, '')));
+  await Promise.all(cookies.map((c) =>
+    ses.cookies.remove(`https://${c.domain.replace(/^\./, '')}${c.path}`, c.name)));
+  await Promise.all(VK_ORIGINS.map((origin) => ses.clearStorageData({ origin })));
+}
+
 async function start() {
+  await forgetVk(session.fromPartition('persist:app'));
   const [{ config, startServer }, { startVkPoller }] = await Promise.all([
     load('server.mjs'), load('vk-electron.mjs'),
   ]);
