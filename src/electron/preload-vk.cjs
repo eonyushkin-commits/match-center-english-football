@@ -1,14 +1,13 @@
-// Выполняется в невидимом окне со страницей канала VK до её скриптов.
-// Перехватывает ответы, которыми сайт наполняет свои карточки, и складывает их в window.__mcCatalog.
-// Встроенный отладчик Electron (Network.enable) для этого не годится — команда не отвечает.
+// Выполняется в скрытом окне со страницей канала VK до её скриптов (запасной способ чтения).
+// Перехватывает ответы, которыми сайт наполняет карточки, и складывает их в window.__mcCatalog.
 (() => {
   const CATALOG = /api\.vkvideo\.ru\/method\/catalog\./;
   const store = [];
   Object.defineProperty(window, '__mcCatalog', { get: () => store });
 
-  const keep = (text) => {
+  const keep = (data) => {
     try {
-      const videos = JSON.parse(text)?.response?.videos;
+      const videos = (typeof data === 'string' ? JSON.parse(data) : data)?.response?.videos;
       if (Array.isArray(videos)) store.push(...videos);
     } catch {}
   };
@@ -24,7 +23,8 @@
   const open0 = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     if (CATALOG.test(String(url))) {
-      this.addEventListener('load', () => { if (typeof this.responseText === 'string') keep(this.responseText); });
+      // responseText недоступен при responseType 'json' — тогда берём уже разобранный response
+      this.addEventListener('load', () => keep(this.responseType === 'json' ? this.response : this.responseText));
     }
     return open0.call(this, method, url, ...rest);
   };

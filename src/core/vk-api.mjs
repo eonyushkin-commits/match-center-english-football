@@ -1,8 +1,7 @@
-// Чтение эфиров VK напрямую через API VK Видео — теми же запросами, которые делает страница
-// канала для незалогиненного посетителя: анонимный токен → catalog.getVideo → catalog.getSection.
-// Занимает меньше секунды на канал против 5–12 с у страницы в окне или браузере.
-// Если VK что-то поменяет, withApi переключает канал на чтение страницы.
-import { toItems } from './vk-parse.mjs';
+// Чтение эфиров напрямую через API VK Видео — теми же запросами, которые делает страница канала
+// для незалогиненного посетителя: анонимный токен → catalog.getVideo → catalog.getSection.
+// Меньше секунды на канал; если VK что-то поменяет, опрос переключится на чтение страницы.
+import { toItems } from './vk-items.mjs';
 
 // публичные данные веб-клиента vkvideo.ru, их видит любой посетитель сайта
 const CLIENT_ID = '52461373';
@@ -10,7 +9,7 @@ const CLIENT_SECRET = 'o557NLIkAErNhakXrQ7A';
 const APP_ID = '6287487';
 const API = 'https://api.vkvideo.ru/method';
 const VERSION = '5.289';
-const PAGES = 2; // догрузок по 20 эфиров сверх первых трёх — около месяца назад, как и на странице
+const PAGES = 2; // догрузки по 20 эфиров сверх первых трёх — около месяца назад
 
 export function createVkApi(fetchImpl = fetch) {
   let token = null; // { value, expires }
@@ -22,7 +21,7 @@ export function createVkApi(fetchImpl = fetch) {
       body: new URLSearchParams(body).toString(),
       signal: AbortSignal.timeout(15e3),
     });
-    if (!r.ok) throw new Error(`${r.status} ${url.split('?')[0]}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   }
 
@@ -48,7 +47,7 @@ export function createVkApi(fetchImpl = fetch) {
     return j.response;
   }
 
-  async function fetchChannel(ch) {
+  async function readChannel(ch) {
     const first = await call('catalog.getVideo', { url: `https://vkvideo.ru/@${ch.screenName}/lives`, need_blocks: '1' });
     const videos = [...(first.videos || [])];
     const catalog = first.catalog;
@@ -59,23 +58,10 @@ export function createVkApi(fetchImpl = fetch) {
       videos.push(...(page.videos || []));
       from = page.section?.next_from;
     }
-    const items = toItems(videos, ch);
-    if (!items.length) throw new Error('API не вернул ни одного эфира');
-    return items;
+    // пустой ответ чаще всего означает гео-ограничение: API отвечает, но без эфиров
+    if (!videos.length) throw new Error('канал не вернул ни одного видео (доступ не из России?)');
+    return toItems(videos, ch);
   }
 
-  return { fetchChannel };
-}
-
-// Сначала API, при любой ошибке — прежний способ (страница канала)
-export function withApi(fallback, fetchImpl) {
-  const { fetchChannel } = createVkApi(fetchImpl);
-  return async (ch) => {
-    try {
-      return await fetchChannel(ch);
-    } catch (e) {
-      console.warn(`VK API, ${ch.label || ch.screenName}: ${e.message} — читаю страницу канала`);
-      return fallback(ch);
-    }
-  };
+  return { name: 'api', read: readChannel };
 }
