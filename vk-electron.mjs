@@ -3,7 +3,8 @@
 // Playwright для этого не нужен.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, net } from 'electron';
+import { withApi } from './vk-api.mjs';
 import { CARDS_JS, fromCards, startPoller, toItems } from './vk-parse.mjs';
 
 const PRELOAD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'electron', 'preload-vk.cjs');
@@ -56,6 +57,7 @@ async function readChannel(win, ch) {
   return cards;
 }
 
-export function startVkPoller(channels, intervalMs = 120e3) {
-  return startPoller(channels, intervalMs, scrapeChannel);
+// основной путь — API VK через сетевой стек Chromium (учитывает системный прокси), окно — запасной
+export function startVkPoller(channels, intervalMs = 60e3) {
+  return startPoller(channels, intervalMs, withApi(scrapeChannel, net.fetch));
 }

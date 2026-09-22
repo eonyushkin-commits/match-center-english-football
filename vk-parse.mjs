@@ -48,20 +48,19 @@ export const CARDS_JS = `[...document.querySelectorAll('[data-testid="catalog_it
 
 export const fromCards = (cards, ch) => cards.map(withChannel(ch)).filter((s) => s.teams);
 
-// Фоновое обновление: все каналы по очереди раз в intervalMs, снимок отдаётся сразу.
+// Фоновое обновление: все каналы параллельно раз в intervalMs, снимок отдаётся сразу.
 export function startPoller(channels, intervalMs, scrapeChannel) {
   const state = { streams: [], errors: [], updatedAt: null };
   const byChannel = new Map();
 
   async function tick() {
-    const errors = [];
-    for (const ch of channels) {
+    const errors = (await Promise.all(channels.map(async (ch) => {
       try {
         byChannel.set(ch.screenName, await scrapeChannel(ch));
       } catch (e) {
-        errors.push(`${ch.label || ch.screenName}: ${e.message.split('\n')[0]}`);
+        return `${ch.label || ch.screenName}: ${e.message.split('\n')[0]}`;
       }
-    }
+    }))).filter(Boolean);
     state.streams = [...byChannel.values()].flat();
     state.errors = errors;
     state.updatedAt = Date.now();

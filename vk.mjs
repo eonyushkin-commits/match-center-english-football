@@ -3,6 +3,7 @@
 // которые страница сама получает для отрисовки карточек.
 import { chromium } from 'playwright';
 import { CARDS_JS, collectVideos, fromCards, startPoller, toItems } from './vk-parse.mjs';
+import { withApi } from './vk-api.mjs';
 
 let browserPromise = null;
 let proxy; // { server: 'socks5://host:port' } — задаётся в config.json как vkProxy
@@ -45,7 +46,8 @@ async function scrapeChannel(ch) {
   }
 }
 
-export function startVkPoller(channels, intervalMs = 120e3, proxyServer = null) {
+export function startVkPoller(channels, intervalMs = 60e3, proxyServer = null) {
   if (proxyServer) proxy = { server: proxyServer };
-  return startPoller(channels, intervalMs, scrapeChannel);
+  // прокси (vkProxy) умеет только браузер — с ним читаем страницы, без него сначала API
+  return startPoller(channels, intervalMs, proxyServer ? scrapeChannel : withApi(scrapeChannel));
 }

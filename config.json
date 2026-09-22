@@ -1,6 +1,6 @@
 {
   "port": 3777,
-  "vkRefreshSeconds": 120,
+  "vkRefreshSeconds": 60,
   "channels": [
     { "screenName": "englishaccent", "label": "Английский Акцент" },
     { "screenName": "pl_forever", "label": "АПЛ Навсегда" },

@@ -1,5 +1,5 @@
-// Главный процесс приложения: поднимает локальный сервер, читает эфиры VK своим же окном
-// и показывает матч-центр. Настройки копируются в папку пользователя, чтобы их можно было править.
+// Главный процесс приложения: поднимает локальный сервер, читает эфиры VK (через API, запасной путь —
+// скрытым окном) и показывает матч-центр. Настройки копируются в папку пользователя, чтобы их можно было править.
 const { app, BrowserWindow, Menu, dialog, session, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -31,7 +31,7 @@ async function start() {
   const [{ config, startServer }, { startVkPoller }] = await Promise.all([
     load('server.mjs'), load('vk-electron.mjs'),
   ]);
-  const vk = startVkPoller(config.channels, (config.vkRefreshSeconds || 120) * 1000);
+  const vk = startVkPoller(config.channels, (config.vkRefreshSeconds || 60) * 1000);
   // 0 — свободный порт, чтобы не конфликтовать с `npm start`; только локально — сеть не нужна,
   // и Windows не спрашивает разрешение брандмауэра
   const server = await startServer(vk, 0, '127.0.0.1');
