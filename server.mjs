@@ -1,5 +1,5 @@
 // Матч-центр: расписание FotMob + трансляции из VK-каналов.
-// Запуск: node server.mjs  →  http://localhost:3777
+// Запуск: node cli.mjs  →  http://localhost:3777
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
