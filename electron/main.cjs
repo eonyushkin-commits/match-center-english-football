@@ -1,6 +1,6 @@
 // Главный процесс приложения: поднимает локальный сервер, читает эфиры VK своим же окном
 // и показывает матч-центр. Настройки копируются в папку пользователя, чтобы их можно было править.
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -59,4 +59,8 @@ Menu.setApplicationMenu(Menu.buildFromTemplate([
   },
 ]));
 
-app.whenReady().then(start);
+// без окна приложение осталось бы висеть невидимым процессом (например, при опечатке в config.json)
+app.whenReady().then(start).catch((e) => {
+  dialog.showErrorBox('Матч-центр не запустился', `${e.message}\n\nНастройки: ${userConfig}`);
+  app.quit();
+});
