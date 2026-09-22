@@ -331,7 +331,9 @@ async function fetchDay() {
     render();
   } catch (e) {
     if (my !== seq) return;
-    $('#list').innerHTML = `<div class="empty">Не удалось загрузить: ${esc(e.message)}</div>`;
+    // расписание уже на экране — не трогаем список, чтобы не оборвать открытую трансляцию
+    if (state.data) $('#notice').innerHTML = `<div class="notice"><b>Не удалось обновить:</b> ${esc(e.message)}</div>`;
+    else $('#list').innerHTML = `<div class="empty">Не удалось загрузить: ${esc(e.message)}</div>`;
   }
   // пока сервер впервые читает каналы VK — спрашиваем чаще
   timer = setTimeout(fetchDay, state.data && !state.data.vk.ready ? 5e3 : 60e3);
