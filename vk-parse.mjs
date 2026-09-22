@@ -22,7 +22,9 @@ const withChannel = (ch) => (s) => ({
 });
 
 export function toItems(videos, ch) {
-  return videos
+  // страница может запросить каталог несколько раз — одно видео оставляем один раз, в последней версии
+  const unique = new Map(videos.map((v) => [`${v.owner_id}_${v.id}`, v]));
+  return [...unique.values()]
     .filter((v) => v.live_status)
     .map((v) => ({
       title: v.title,
