@@ -17,7 +17,9 @@ async function start() {
     load('server.mjs'), load('vk-electron.mjs'),
   ]);
   const vk = startVkPoller(config.channels, (config.vkRefreshSeconds || 120) * 1000);
-  const server = await startServer(vk, 0); // 0 — свободный порт, чтобы не конфликтовать с `npm start`
+  // 0 — свободный порт, чтобы не конфликтовать с `npm start`; только локально — сеть не нужна,
+  // и Windows не спрашивает разрешение брандмауэра
+  const server = await startServer(vk, 0, '127.0.0.1');
   const { port } = server.address();
 
   const win = new BrowserWindow({

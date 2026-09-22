@@ -118,8 +118,7 @@ export function createServer(vk) {
 }
 
 // HOST=127.0.0.1 — чтобы приложение не было доступно снаружи (например, за nginx)
-export function startServer(vk, port = Number(process.env.PORT || config.port || 3777)) {
-  const host = process.env.HOST || undefined;
+export function startServer(vk, port = Number(process.env.PORT || config.port || 3777), host = process.env.HOST || undefined) {
   return new Promise((resolve) => {
     const server = createServer(vk);
     server.listen(port, host, () => {
