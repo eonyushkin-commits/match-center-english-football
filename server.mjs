@@ -9,8 +9,20 @@ import { teamNames, matchStreams } from './match.mjs';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // MC_CONFIG — путь к настройкам: в установленном приложении они лежат в папке пользователя,
 // потому что сам пакет только для чтения
-const CONFIG_PATH = process.env.MC_CONFIG || path.join(ROOT, 'config.json');
-export const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
+const DEFAULT_CONFIG = path.join(ROOT, 'config.json');
+const CONFIG_PATH = process.env.MC_CONFIG || DEFAULT_CONFIG;
+const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
+
+// Пользовательские настройки накладываются на встроенные, чтобы каналы и алиасы из новых версий
+// доходили и до тех, у кого config.json скопирован раньше. Канал убирается через "disabled": true.
+function mergeConfig(base, user) {
+  const channels = new Map([...(base.channels || []), ...(user.channels || [])].map((c) => [c.screenName, c]));
+  const teamAliases = { ...base.teamAliases };
+  for (const [k, v] of Object.entries(user.teamAliases || {}))
+    teamAliases[k] = [...new Set([...(teamAliases[k] || []), ...v])];
+  return { ...base, ...user, channels: [...channels.values()].filter((c) => !c.disabled), teamAliases };
+}
+export const config = mergeConfig(await readJson(DEFAULT_CONFIG), await readJson(CONFIG_PATH));
 
 // ---------- простой кэш ----------
 const cache = new Map();
