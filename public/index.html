@@ -316,16 +316,21 @@ $('#list').addEventListener('click', (e) => {
 });
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.player) closePlayer(); });
 
-let timer;
+// seq — номер последнего запроса: ответы на устаревшие запросы (другой день, повторное «↻»)
+// отбрасываются и не заводят свой таймер, иначе опрос начинал идти в несколько потоков
+let timer, seq = 0;
 async function fetchDay() {
   clearTimeout(timer);
+  const my = ++seq;
   try {
     const r = await fetch(`/api/day?date=${ymd(state.date)}&tz=${encodeURIComponent(tz)}`);
     const j = await r.json();
+    if (my !== seq) return;
     if (j.error) throw new Error(j.error);
     state.data = j;
     render();
   } catch (e) {
+    if (my !== seq) return;
     $('#list').innerHTML = `<div class="empty">Не удалось загрузить: ${esc(e.message)}</div>`;
   }
   // пока сервер впервые читает каналы VK — спрашиваем чаще
