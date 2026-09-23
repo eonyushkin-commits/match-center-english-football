@@ -73,6 +73,8 @@ export function createNamer(ru, aliases = {}) {
 const best = (names, s) => Math.max(0, ...names.map((n) => nameScore(n, s)));
 const RANK = { started: 0, upcoming: 1, finished: 2, failed: 3 };
 const DAY = 24 * 3600e3;
+// сколько людей выбрало эфир: у идущего — зрители сейчас, у записи — просмотры
+const audience = (s) => (s.status === 'started' ? s.spectators : s.status === 'finished' ? s.views : null) ?? -1;
 
 export function matchStreams(match, homeNames, awayNames, streams) {
   const kickoff = Date.parse(match.status.utcTime);
@@ -90,7 +92,9 @@ export function matchStreams(match, homeNames, awayNames, streams) {
     // Запланированный эфир у завершённого матча — резервный, который так и не запустили
     // («РЕЗЕРВ. Фулхэм – Манчестер Юнайтед»): смотреть там нечего.
     .filter((s) => !(match.status.finished && s.status === 'upcoming'))
-    // Порядок: идущие, затем запланированные, затем записи — внутри по времени начала
-    .sort((x, y) => RANK[x.status] - RANK[y.status] || (x.time ?? 0) - (y.time ?? 0) || y.score - x.score)
+    // Порядок: идущие, затем запланированные, затем записи. Внутри — самый популярный первым:
+    // обычно это самая стабильная трансляция с лучшим комментатором; без чисел — по времени начала.
+    .sort((x, y) => RANK[x.status] - RANK[y.status] || audience(y) - audience(x)
+      || (x.time ?? 0) - (y.time ?? 0) || y.score - x.score)
     .map(({ teams, score, ...s }) => s);
 }

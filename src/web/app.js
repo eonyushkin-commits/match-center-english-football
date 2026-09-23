@@ -12,6 +12,17 @@
   const isLive = (m) => m.started && !m.finished && !m.cancelled;
   const DAYS = { from: -3, to: 4 }; // полоса дат: три дня назад — четыре вперёд
   const STATUS = { started: 'LIVE', upcoming: 'скоро', finished: 'запись', failed: 'сбой' };
+  const compact = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }); // 18,5 тыс.
+  const full = new Intl.NumberFormat('ru-RU'); // 18 557
+
+  // «· 1,2 тыс. смотрят» у идущего эфира, «· 18,5 тыс.» у записи; нет чисел — ничего
+  function audience(s) {
+    if (s.status === 'started' && s.spectators > 0)
+      return { text: ` · ${compact.format(s.spectators)} смотрят`, title: `Смотрят сейчас: ${full.format(s.spectators)}` };
+    if (s.status === 'finished' && s.views > 0)
+      return { text: ` · ${compact.format(s.views)}`, title: `Просмотров: ${full.format(s.views)}` };
+    return null;
+  }
 
   const state = {
     settings: null, // настройки с сервера: тема, фильтры, избранное живут там, а не в браузере
@@ -274,9 +285,12 @@
     const seen = {};
     const label = (s) => ((seen[s.channel] = (seen[s.channel] || 0) + 1) > 1 ? `${s.channel} ${seen[s.channel]}` : s.channel);
     const p = state.player;
-    let chips = m.streams.map((s, i) => `<a class="stream ${s.status}${p?.rowKey === key && p.i === i ? ' active' : ''}"
-        href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" data-play="${i}">
-        <span class="tag">${STATUS[s.status] || ''}</span>${esc(label(s))}</a>`).join('');
+    let chips = m.streams.map((s, i) => {
+      const aud = audience(s);
+      return `<a class="stream ${s.status}${p?.rowKey === key && p.i === i ? ' active' : ''}"
+        href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(aud ? `${s.title}\n${aud.title}` : s.title)}" data-play="${i}">
+        <span class="tag">${STATUS[s.status] || ''}</span>${esc(label(s))}${aud ? `<span class="aud">${esc(aud.text)}</span>` : ''}</a>`;
+    }).join('');
     if (!chips && !m.finished && !m.cancelled) {
       const q = encodeURIComponent(`${m.home.name} ${m.away.name}`);
       chips = `<a class="stream search" href="https://vkvideo.ru/search?q=${q}" target="_blank" rel="noopener">Искать в VK</a>`;

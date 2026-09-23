@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { matchStreams, parseTeams } from '../src/core/match.mjs';
 import { createStreamPoller } from '../src/core/streams.mjs';
 import { toItems } from '../src/core/vk-items.mjs';
 
@@ -67,4 +68,32 @@ test('toItems: повторы одного видео убираются, ста
   assert.deepEqual(items.map((s) => [s.url, s.status]), [['https://vkvideo.ru/live-5_1', 'started'], ['https://vkvideo.ru/live-5_2', 'finished']]);
   assert.equal(items[0].channel, 'Канал');
   assert.equal(items[0].time, 1758380000000);
+});
+
+test('toItems: просмотры записи и зрители эфира передаются дальше', () => {
+  const v = (id, status, extra) => ({ owner_id: -5, id, title: 'Фулхэм — Манчестер Юнайтед | АПЛ', live_status: status, date: 1758380000, ...extra });
+  const [live, record, card] = toItems([
+    v(1, 'started', { views: 900, spectators: 1234 }),
+    v(2, 'postlive', { views: 18557 }), // у записей VK не присылает spectators
+    v(3, 'postlive', {}),
+  ], { label: 'Канал' });
+  assert.deepEqual([live.views, live.spectators], [900, 1234]);
+  assert.deepEqual([record.views, record.spectators], [18557, null]);
+  assert.deepEqual([card.views, card.spectators], [null, null]);
+});
+
+test('matchStreams: внутри статуса самый популярный эфир первым', () => {
+  const m = { home: { id: 1 }, away: { id: 2 }, status: { utcTime: '2026-09-20T15:30:00Z', finished: false } };
+  const s = (channel, status, extra) => ({
+    title: 'Фулхэм — Манчестер Юнайтед', teams: parseTeams('Фулхэм — Манчестер Юнайтед'), status, channel, url: channel,
+    time: Date.parse('2026-09-20T15:00:00Z'), views: null, spectators: null, ...extra,
+  });
+  const order = matchStreams(m, ['фулхэм'], ['манчестер юнайтед'], [
+    s('запись-мало', 'finished', { views: 3000 }),
+    s('эфир-мало', 'started', { spectators: 150, views: 99999 }), // у эфира считаются зрители, а не просмотры
+    s('запись-без-чисел', 'finished'),
+    s('эфир-много', 'started', { spectators: 5200 }),
+    s('запись-много', 'finished', { views: 65201 }),
+  ]).map((x) => x.channel);
+  assert.deepEqual(order, ['эфир-много', 'эфир-мало', 'запись-много', 'запись-мало', 'запись-без-чисел']);
 });
