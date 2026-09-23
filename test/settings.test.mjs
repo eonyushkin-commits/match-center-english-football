@@ -100,3 +100,12 @@ test('update сохраняет на диск и сообщает об изме�
   assert.equal(reopened.get().ui.filters.live, true);
   assert.equal(reopened.get().favorites[0].id, 10260);
 });
+
+test('трей, автозапуск и режим без спойлеров', () => {
+  const s = resolve({});
+  assert.deepEqual([s.tray, s.autostart, s.ui.hideScores], [true, false, false], 'по умолчанию: трей есть, автозапуска нет');
+  const user = applyPatch({}, { tray: false, autostart: true, ui: { hideScores: true } });
+  const r = resolve(user);
+  assert.deepEqual([r.tray, r.autostart, r.ui.hideScores], [false, true, true]);
+  assert.equal(resolve(applyPatch(user, { ui: { theme: 'dark' } })).ui.hideScores, true, 'другие правки интерфейса его не сбрасывают');
+});

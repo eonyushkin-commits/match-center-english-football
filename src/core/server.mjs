@@ -11,6 +11,8 @@ const STATIC = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
   '/icon.svg': ['icon.svg', 'image/svg+xml'],
+  '/player.html': ['player.html', 'text/html; charset=utf-8'],
+  '/player.js': ['player.js', 'text/javascript; charset=utf-8'],
 };
 // Страница может показывать только картинки FotMob и плеер VK — всё остальное браузер заблокирует
 const CSP = [
@@ -60,7 +62,7 @@ function validTimeZone(tz) {
   }
 }
 
-export function createHandler({ settings, poller, fotmob, version }) {
+export function createHandler({ settings, poller, fotmob, details, version }) {
   const withLeagues = (s) => ({ ...s, knownLeagues: defaults.knownLeagues });
   const routes = {
     'GET /api/day': async (u) => {
@@ -76,6 +78,11 @@ export function createHandler({ settings, poller, fotmob, version }) {
       return { version, vk: { ...vk, streamCount: streams.length }, warnings: settings.warnings };
     },
     'GET /api/streams': () => poller.snapshot(), // для отладки: все прочитанные эфиры
+    'GET /api/match': (u) => {
+      const id = u.searchParams.get('id') || '';
+      if (!/^\d{1,12}$/.test(id)) throw new HttpError(400, 'id: нужен номер матча FotMob');
+      return details(id);
+    },
     'GET /api/settings': () => withLeagues(settings.get()),
     'PUT /api/settings': async (u, req) => withLeagues(await settings.update(await readJson(req))),
     'POST /api/refresh': () => {

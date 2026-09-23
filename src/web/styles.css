@@ -218,3 +218,60 @@ textarea.field { height: auto; padding: 8px 10px; width: 100%; resize: vertical;
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- без спойлеров ---------- */
+.score.masked { min-width: 22px; height: 20px; padding: 0 6px; border: 1px dashed var(--line-strong); border-radius: 6px;
+  background: none; color: var(--faint); font-weight: 600; line-height: 1; }
+.score.masked:hover { border-color: var(--vk); color: var(--vk); }
+#spoilers.on { background: var(--vk); border-color: var(--vk); color: #fff; }
+
+/* ---------- события и составы ---------- */
+.match .teams { cursor: pointer; }
+.more { border: 0; background: none; padding: 0; color: var(--faint); font-size: 12px; }
+.more:hover, .more.on { color: var(--vk); }
+.details { padding: 4px 14px 14px; border-top: 0 !important; }
+.dinner { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 10px 14px 12px; }
+.dinner h4 { margin: 6px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.dinner h4 + * { margin-top: 0; }
+.dnote { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dnote.small { font-size: 11px; color: var(--faint); margin-top: 6px; }
+.timeline { list-style: none; margin: 0; padding: 0; }
+.ev { display: grid; grid-template-columns: 1fr 104px 1fr; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
+.ev + .ev { border-top: 1px dashed var(--line); }
+.ev .h { text-align: right; }
+.ev .mid { display: flex; align-items: center; justify-content: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.ev .min { color: var(--muted); min-width: 34px; text-align: right; }
+.ev .evscore { min-width: 28px; }
+.evtext small { display: block; color: var(--faint); font-size: 11px; }
+.ev.sub .evtext span::before { content: "↑ "; color: var(--accent); }
+.ev.sub .evtext small::before { content: "↓ "; color: var(--live); }
+.ev.half { display: block; text-align: center; color: var(--muted); font-size: 12px; }
+.ev.half span { padding: 1px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.lineups { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.lu ol { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.lu li { padding: 2px 0; }
+.lu .num { display: inline-block; min-width: 24px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.luhead { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.luhead span { color: var(--muted); font-size: 12px; }
+.coach { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.lu details { margin-top: 6px; }
+.lu summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+
+/* ---------- плеер: в отдельное окно ---------- */
+.phead .popout { height: 30px; padding: 0 10px; font-size: 12px; }
+
+/* ---------- обновление приложения ---------- */
+.notice.update { align-items: center; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); color: var(--text); }
+.notice.update > span:first-child { flex: 1; }
+.notice.update a { color: var(--vk); margin-left: 6px; }
+.notice.update .actions { display: flex; gap: 6px; }
+.notice.update .actions button { margin: 0; }
+.notice.update .btn { padding: 0 16px; color: inherit; background: var(--surface); border: 1px solid var(--line); }
+.notice.update .btn.primary { background: var(--accent); color: var(--accent-ink); }
+.notice.update .icon-btn { width: 30px; height: 30px; box-shadow: none; color: var(--muted); }
+.notice.update progress { width: 160px; accent-color: var(--accent); }
+
+@media (max-width: 560px) {
+  .ev { grid-template-columns: 1fr 88px 1fr; gap: 6px; }
+  .lineups { grid-template-columns: 1fr; }
+}

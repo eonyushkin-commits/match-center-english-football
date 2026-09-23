@@ -23,5 +23,7 @@
     "Вест Хэм": ["Вест Хэм Юнайтед"]
   },
   "refreshSeconds": 60,
-  "notifications": true
+  "notifications": true,
+  "tray": true,
+  "autostart": false
 }

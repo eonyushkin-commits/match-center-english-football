@@ -52,9 +52,13 @@ export function resolve(user = {}) {
     favorites: Array.isArray(user.favorites) ? user.favorites : [],
     refreshSeconds: clamp(user.refreshSeconds, 30, 600, defaults.refreshSeconds),
     notifications: typeof user.notifications === 'boolean' ? user.notifications : defaults.notifications,
+    tray: typeof user.tray === 'boolean' ? user.tray : defaults.tray, // закрытие окна сворачивает в трей
+    autostart: typeof user.autostart === 'boolean' ? user.autostart : defaults.autostart, // запуск вместе с Windows
     ui: {
       theme: THEMES.includes(ui.theme) ? ui.theme : 'system',
       filters: Object.fromEntries(FILTERS.map((f) => [f, !!ui.filters?.[f]])),
+      hideScores: !!ui.hideScores, // режим без спойлеров
+      trayHintShown: !!ui.trayHintShown,
       window: ui.window && typeof ui.window === 'object' ? ui.window : null,
     },
   };
@@ -121,12 +125,15 @@ export function applyPatch(user, patch) {
     next.refreshSeconds = v === defaults.refreshSeconds ? undefined : v;
   }
 
-  if (patch.notifications !== undefined) next.notifications = !!patch.notifications;
+  for (const key of ['notifications', 'tray', 'autostart'])
+    if (patch[key] !== undefined) next[key] = !!patch[key];
 
   if (patch.ui !== undefined) {
     const ui = { ...(user.ui || {}) };
     if (THEMES.includes(patch.ui.theme)) ui.theme = patch.ui.theme;
     if (patch.ui.filters) ui.filters = Object.fromEntries(FILTERS.map((f) => [f, !!patch.ui.filters[f]]));
+    for (const key of ['hideScores', 'trayHintShown'])
+      if (patch.ui[key] !== undefined) ui[key] = !!patch.ui[key];
     if (patch.ui.window && typeof patch.ui.window === 'object') {
       const { x, y, width, height, maximized } = patch.ui.window;
       ui.window = { x, y, width, height, maximized: !!maximized };

@@ -39,5 +39,7 @@ export function createFotmob(fetchImpl = fetch) {
     names: () => cached('ru', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/translationmapping?locale=ru')),
     day: (date, tz) => cached(`day:${date}:${tz}`, 45e3, () =>
       getJson(`https://www.fotmob.com/api/data/matches?date=${date}&timezone=${encodeURIComponent(tz)}`)),
+    // подробности матча кэширует и задерживает details.mjs
+    match: (id) => getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${encodeURIComponent(id)}`),
   };
 }

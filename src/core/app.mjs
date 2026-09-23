@@ -1,5 +1,6 @@
 // Всё ядро вместе: настройки, опрос каналов, FotMob, сервер и уведомления.
 // Приложение Electron и `npm start` отличаются только способом запасного чтения страницы и fetch.
+import { createDetails } from './details.mjs';
 import { createFotmob } from './fotmob.mjs';
 import { createHandler, startServer } from './server.mjs';
 import { openSettings } from './settings.mjs';
@@ -24,9 +25,10 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
   });
 
   const listeners = new Set();
-  watchFavorites({ poller, settings, fotmob, onStart: (event) => listeners.forEach((fn) => fn(event)) });
+  const watcher = watchFavorites({ poller, settings, fotmob, onEvent: (event) => listeners.forEach((fn) => fn(event)) });
+  const details = createDetails({ fotmob });
 
-  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, version }), { host, port });
+  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, version }), { host, port });
   poller.refresh();
 
   return {
@@ -34,9 +36,11 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
     poller,
     server,
     url,
-    onStreamStart: (fn) => listeners.add(fn),
+    // уведомления о матчах избранных: { kind: soon | kickoff | stream, date, match, stream? }
+    onNotify: (fn) => listeners.add(fn),
     close() {
       poller.stop();
+      watcher.stop();
       server.close();
     },
   };

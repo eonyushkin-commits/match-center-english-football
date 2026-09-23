@@ -33,8 +33,15 @@
     date: ymd(new Date()),
     q: '',
     player: null, // { rowKey, i }
+    details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
+    revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
+    update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
+    updateDismissed: null, // версия, о которой попросили пока не напоминать
   };
   let playerEl = null;
+
+  // режим без спойлеров: счёт скрыт, пока его не попросят показать
+  const scoresHidden = (m) => !!state.settings?.ui.hideScores && !state.revealed.has(m.id) && (m.started || m.finished);
 
   // ---------- сеть ----------
   async function request(method, url, { body, signal } = {}) {
@@ -143,8 +150,9 @@
     const d = state.day;
     const f = state.settings.ui.filters;
     const q = state.q.trim().toLowerCase();
-    const pinned = state.player?.rowKey; // матч с открытым плеером не прячем никакими фильтрами
-    const hit = (m, lg) => (!f.streams || m.streams.length) && (!f.live || isLive(m)) && (!f.favorites || m.favorite)
+    // матч с открытым плеером или подробностями не прячем никакими фильтрами
+    const pinned = new Set([state.player?.rowKey, state.details?.rowKey]);
+    const hit =(m, lg) => (!f.streams || m.streams.length) && (!f.live || isLive(m)) && (!f.favorites || m.favorite)
       && (!q || `${lg.name} ${lg.country}`.toLowerCase().includes(q) || `${m.home.name} ${m.away.name}`.toLowerCase().includes(q));
     const out = [];
 
@@ -152,12 +160,12 @@
       const rows = [];
       for (const lg of d.leagues) for (const m of lg.matches) {
         const key = `live:${m.id}`;
-        if (key === pinned || (isLive(m) && m.streams.some((s) => s.status === 'started') && hit(m, lg))) rows.push({ key, m, lg, showLeague: true });
+        if (pinned.has(key) || (isLive(m) && m.streams.some((s) => s.status === 'started') && hit(m, lg))) rows.push({ key, m, lg, showLeague: true });
       }
       if (rows.length) out.push({ key: 'live', live: true, rows });
     }
     for (const lg of d.leagues) {
-      const rows = lg.matches.filter((m) => `m:${m.id}` === pinned || hit(m, lg)).map((m) => ({ key: `m:${m.id}`, m, lg }));
+      const rows = lg.matches.filter((m) => pinned.has(`m:${m.id}`) || hit(m, lg)).map((m) => ({ key: `m:${m.id}`, m, lg }));
       if (rows.length) out.push({ key: `lg:${lg.id}`, lg, rows });
     }
     return out;
@@ -190,6 +198,9 @@
       b.classList.toggle('on', !!f[b.dataset.filter]);
       b.setAttribute('aria-pressed', String(!!f[b.dataset.filter]));
     }
+    const hide = !!state.settings?.ui.hideScores;
+    $('#spoilers').classList.toggle('on', hide);
+    $('#spoilers').setAttribute('aria-pressed', String(hide));
   }
 
   function renderStatus() {
@@ -217,6 +228,9 @@
     if (vk?.ready && vk.channels.length && vk.channels.every((c) => c.ok === false))
       out.push(['bad', '<b>Не удалось прочитать ни один канал VK.</b> Каналы читаются только с российского адреса. <button type="button" data-action="status">Подробнее</button>']);
     if (state.saveError) out.push(['bad', `<b>Не удалось сохранить настройки:</b> ${esc(state.saveError)}`]);
+    const u = state.update;
+    const update = u && !(u.state === 'available' && state.updateDismissed === u.version) && updateHtml(u);
+    if (update) out.unshift(['update', update]);
     $('#notices').innerHTML = out.map(([cls, html]) => `<div class="notice ${cls}">${html}</div>`).join('');
   }
 
@@ -252,6 +266,7 @@
       for (const r of s.rows) {
         items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r) });
         if (state.player?.rowKey === r.key && playerEl) items.push({ key: 'player', node: playerEl });
+        if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m) });
       }
       reconcile(node.lastElementChild, items);
     }
@@ -269,15 +284,19 @@
     // статус — как его отдаёт FotMob (FT, HT, AET, Pen…)
     const when = esc(m.cancelled ? (m.reason || 'Canc.') : live ? (m.liveTime || 'LIVE') : m.finished ? (m.reason || 'FT') : hhmm(m.utcTime));
     const showScore = m.started || m.finished;
+    const hidden = scoresHidden(m);
     const favs = favoriteIds();
     const team = (t, other) => {
       const fav = favs.has(t.id);
-      return `<div class="team${m.finished && t.score > other.score ? ' win' : ''}">
+      const score = hidden
+        ? `<button type="button" class="score masked" data-reveal="${m.id}" title="Показать счёт">?</button>`
+        : `<span class="score">${esc(t.score)}</span>`;
+      return `<div class="team${!hidden && m.finished && t.score > other.score ? ' win' : ''}">
         <img loading="lazy" src="https://images.fotmob.com/image_resources/logo/teamlogo/${t.id}_small.png" alt="">
         <span class="name">${esc(t.name)}</span>
         <button type="button" class="star${fav ? ' on' : ''}" data-fav="${t.id}" data-name="${esc(t.name)}" aria-pressed="${fav}"
           title="${fav ? 'Убрать из избранного' : 'В избранное — уведомлю о начале трансляции'}">★</button>
-        ${showScore ? `<span class="score">${esc(t.score)}</span>` : ''}</div>`;
+        ${showScore ? score : ''}</div>`;
     };
 
     // у канала бывает несколько эфиров на матч (перезапуск) — нумеруем: «Sportcast», «Sportcast 2»
@@ -297,8 +316,90 @@
     return `<div class="when${live ? ' live' : ''}">${when}</div>
       <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
       <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}
-        <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a></div>
+        <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a>
+        <button type="button" class="more${state.details?.rowKey === key ? ' on' : ''}" data-details aria-expanded="${state.details?.rowKey === key}">Подробнее</button></div>
       ${chips ? `<div class="streams">${chips}</div>` : ''}`;
+  }
+
+  // ---------- события и составы ----------
+  function toggleDetails(rowKey) {
+    clearTimeout(state.details?.timer);
+    state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: Number(rowKey.split(':')[1]), data: null, error: null, timer: null };
+    renderList();
+    if (state.details) loadDetails();
+  }
+
+  async function loadDetails() {
+    const d = state.details;
+    if (!d) return;
+    clearTimeout(d.timer);
+    try {
+      d.data = await request('GET', `/api/match?id=${d.id}`);
+      d.error = null;
+    } catch (e) {
+      d.error = e.message;
+    }
+    if (state.details !== d) return; // пока грузили, закрыли или открыли другой матч
+    renderList();
+    // идущий матч обновляем, пока панель открыта; «появятся через N с» — ровно к этому моменту
+    if (d.data?.pending) d.timer = setTimeout(loadDetails, Math.max(5, d.data.readyIn) * 1000);
+    else if (d.data?.state === 'live') d.timer = setTimeout(loadDetails, 30e3);
+  }
+
+  const CARD = { yellow: '🟨', red: '🟥', yellowred: '🟨🟥' };
+
+  function eventHtml(e) {
+    if (e.kind === 'half') return `<li class="ev half"><span>${esc(e.label)} · ${esc(e.score.join(':'))}</span></li>`;
+    let icon = '⇄';
+    let text = `<span>${esc(e.in)}</span><small>${esc(e.out)}</small>`;
+    if (e.kind === 'goal') {
+      icon = '⚽';
+      text = `<b>${esc(e.player)}</b>${e.penalty ? ' (пен.)' : ''}${e.own ? ' (авт.)' : ''}${e.assist ? `<small>${esc(e.assist)}</small>` : ''}`;
+    } else if (e.kind === 'card') {
+      icon = CARD[e.card] || '🟨';
+      text = `<span>${esc(e.player)}</span>`;
+    }
+    const body = `<div class="evtext">${text}</div>`;
+    return `<li class="ev ${e.kind}"><div class="h">${e.side === 'home' ? body : ''}</div>
+      <div class="mid"><span class="min">${esc(e.minute)}’</span><span class="icon">${icon}</span>${e.kind === 'goal' ? `<b class="evscore">${esc(e.score.join(':'))}</b>` : ''}</div>
+      <div class="a">${e.side === 'away' ? body : ''}</div></li>`;
+  }
+
+  function lineupsHtml(l, m) {
+    const players = (list) => `<ol>${list.map((p) => `<li><span class="num">${esc(p.number)}</span>${esc(p.name)}</li>`).join('')}</ol>`;
+    const team = (t, name) => `<div class="lu"><div class="luhead"><b>${esc(name)}</b>${t.formation ? `<span>${esc(t.formation)}</span>` : ''}</div>
+      ${players(t.starters)}${t.coach ? `<div class="coach">Тренер: ${esc(t.coach)}</div>` : ''}
+      ${t.subs.length ? `<details><summary>Запасные · ${t.subs.length}</summary>${players(t.subs)}</details>` : ''}</div>`;
+    return `<div class="lineups">${team(l.home, m.home.name)}${team(l.away, m.away.name)}</div>`;
+  }
+
+  function detailsHtml(m) {
+    const d = state.details;
+    if (d.error) return `<div class="dnote">Не удалось загрузить: ${esc(d.error)}</div>`;
+    if (!d.data) return '<div class="dnote">Загрузка…</div>';
+    const x = d.data;
+    let events;
+    if (scoresHidden(m)) events = `<div class="dnote">События скрыты, чтобы не выдать счёт. <button type="button" class="btn" data-reveal="${m.id}">Показать счёт и события</button></div>`;
+    else if (x.pending) events = `<div class="dnote">События появятся через ${x.readyIn} с — они идут с задержкой в минуту, чтобы не обгонять трансляцию.</div>`;
+    else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
+    else events = `<ol class="timeline">${x.events.map(eventHtml).join('')}</ol>${x.delayed ? '<div class="dnote small">С задержкой в минуту, чтобы не обгонять трансляцию.</div>' : ''}`;
+    const lineups = x.lineups ? lineupsHtml(x.lineups, m) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
+    return `<div class="dinner"><h4>События</h4>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
+  }
+
+  // ---------- обновление приложения: «Скачать» → «Установить» ----------
+  function updateHtml(u) {
+    const v = esc(u.version);
+    const notes = u.notes ? ` <a href="${esc(u.notes)}" target="_blank" rel="noopener">Что нового ↗</a>` : '';
+    if (u.state === 'available') return `<span><b>Доступна версия ${v}.</b>${notes}</span>
+      <span class="actions"><button type="button" class="btn primary" data-action="update-download">Скачать</button>
+      <button type="button" class="icon-btn" data-action="update-dismiss" aria-label="Напомнить позже" title="Напомнить позже">✕</button></span>`;
+    if (u.state === 'downloading') return `<span><b>Загружается версия ${v}…</b> ${u.percent || 0}%</span><progress max="100" value="${u.percent || 0}"></progress>`;
+    if (u.state === 'ready') return `<span><b>Версия ${v} загружена.</b> Приложение перезапустится — открытая трансляция прервётся.${notes}</span>
+      <span class="actions"><button type="button" class="btn primary" data-action="update-install">Установить</button></span>`;
+    if (u.state === 'error') return `<span><b>Не удалось загрузить обновление:</b> ${esc(u.error)}</span>
+      <span class="actions"><button type="button" class="btn" data-action="update-download">Повторить</button></span>`;
+    return null;
   }
 
   // ---------- панель каналов ----------
@@ -370,6 +471,7 @@
     el.innerHTML = `<div class="clip"><div class="inner">
       <div class="phead"><b>${esc(m.home.name)} — ${esc(m.away.name)}</b>
         <a class="ext" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть в VK ↗</a>
+        <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
         <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
       <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe></div>
     </div></div>`;
@@ -404,18 +506,32 @@
     scrollTo({ top: scrollY + r.top - head - Math.max(0, (free - r.height) / 2), behavior: 'smooth' });
   }
 
-  // вызывается из уведомления о начале трансляции
-  window.mcOpenMatch = async (date, id) => {
+  // Плеер в отдельном окне: в приложении — своё окно поверх остальных, в браузере — всплывающее.
+  // Окон можно открыть сколько угодно — так смотрят несколько матчей сразу.
+  function popOut() {
+    const m = findMatch(Number(state.player?.rowKey.split(':')[1]));
+    const s = m?.streams[state.player.i];
+    const src = s && embedUrl(s);
+    if (!src) return;
+    const q = new URLSearchParams({ src, url: s.url, title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
+    window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
+    closePlayer(); // в двух местах сразу один эфир не нужен
+  }
+
+  // Клик по уведомлению: день матча, строка матча и плеер, если трансляция уже идёт
+  async function openMatchFromNotification(date, id) {
     await (date !== state.date ? setDate(date) : load());
     const m = findMatch(id);
     if (!m) return;
     const rowKey = document.querySelector(`[data-key="live:${id}"]`) ? `live:${id}` : `m:${id}`;
-    const i = Math.max(0, m.streams.findIndex((s) => s.status === 'started'));
-    if (state.player?.rowKey !== rowKey || state.player.i !== i) openPlayer(rowKey, i);
+    const i = m.streams.findIndex((s) => s.status === 'started');
+    if (i >= 0 && (state.player?.rowKey !== rowKey || state.player.i !== i)) openPlayer(rowKey, i);
     const row = document.querySelector(`[data-key="${rowKey}"]`);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     row?.classList.add('flash');
     setTimeout(() => row?.classList.remove('flash'), 1700);
-  };
+  }
+  window.mc?.onOpenMatch(({ date, id }) => openMatchFromNotification(date, id));
 
   // ---------- настройки ----------
   function parseChannel(text) {
@@ -448,8 +564,13 @@
         <section><h3>Обновление и уведомления</h3>
           <label class="row">Перечитывать каналы VK каждые <select class="field" id="refresh">${refreshOptions.map((v) =>
             `<option value="${v}" ${v === s.refreshSeconds ? 'selected' : ''}>${v < 60 ? `${v} с` : `${+(v / 60).toFixed(1)} мин`}</option>`).join('')}</select></label>
-          <label class="row"><input type="checkbox" class="switch" id="notify" ${s.notifications ? 'checked' : ''}> Уведомлять о начале трансляций избранных команд</label>
-          <p class="hint">Избранные: ${s.favorites.length ? s.favorites.map((f) => esc(f.name)).join(', ') : 'пока нет — нажмите ★ рядом с командой'}. Уведомления работают в приложении для Windows.</p></section>
+          <label class="row"><input type="checkbox" class="switch" id="notify" ${s.notifications ? 'checked' : ''}> Уведомлять о матчах избранных команд</label>
+          <p class="hint">За 15 минут до начала, в начале матча и когда канал запускает трансляцию.
+            Избранные: ${s.favorites.length ? s.favorites.map((f) => esc(f.name)).join(', ') : 'пока нет — нажмите ★ рядом с командой'}.${window.mc ? '' : ' Уведомления работают в приложении для Windows.'}</p>
+          ${window.mc ? `<label class="row"><input type="checkbox" class="switch" id="tray" ${s.tray ? 'checked' : ''}> Сворачивать в трей при закрытии окна</label>
+          <p class="hint">Так уведомления приходят и при закрытом окне. Выйти — правой кнопкой по значку в трее.</p>
+          <label class="row"><input type="checkbox" class="switch" id="autostart" ${s.autostart ? 'checked' : ''}> Запускать вместе с Windows</label>
+          <p class="hint">С включённым треем приложение стартует свёрнутым.</p>` : ''}</section>
         <section><h3>Написание команд</h3>
           <textarea class="field" id="aliases" rows="4" placeholder="Манчестер Юнайтед = МЮ, Ман Юнайтед">${esc(aliasText)}</textarea>
           <p class="hint">Если канал пишет команду не так, как FotMob: по строке на команду, слева — название из расписания.</p></section>
@@ -526,6 +647,7 @@
             refreshSeconds: Number($('#refresh', dlg).value),
             notifications: $('#notify', dlg).checked,
             userAliases,
+            ...(window.mc ? { tray: $('#tray', dlg).checked, autostart: $('#autostart', dlg).checked } : {}),
           },
         });
         dlg.close();
@@ -546,6 +668,8 @@
     state.day = null;
     state.dayDate = null;
     state.error = null;
+    clearTimeout(state.details?.timer);
+    state.details = null;
     closePlayer(true);
     renderDates();
     scrollTo({ top: 0 });
@@ -565,6 +689,13 @@
   for (const b of $$('[data-filter]')) b.addEventListener('click', () => {
     if (state.settings) setFilter(b.dataset.filter, !state.settings.ui.filters[b.dataset.filter]);
   });
+  $('#spoilers').addEventListener('click', () => {
+    if (!state.settings) return;
+    state.settings.ui.hideScores = !state.settings.ui.hideScores;
+    state.revealed.clear(); // включили заново — прячем и то, что раскрывали раньше
+    saveUi({ hideScores: state.settings.ui.hideScores });
+    render();
+  });
   $('#q').addEventListener('input', (e) => { state.q = e.target.value; if (state.settings) renderList(); });
   $('#refresh').addEventListener('click', () => load());
   $('#open-settings').addEventListener('click', openSettings);
@@ -581,7 +712,19 @@
   $('#list').addEventListener('click', (e) => {
     const star = e.target.closest('[data-fav]');
     if (star) { toggleFavorite(Number(star.dataset.fav), star.dataset.name); return; }
+    const reveal = e.target.closest('[data-reveal]');
+    if (reveal) {
+      state.revealed.add(Number(reveal.dataset.reveal));
+      renderList();
+      return;
+    }
     if (e.target.closest('.player .close')) { closePlayer(); return; }
+    if (e.target.closest('.player .popout')) { popOut(); return; }
+    // «Подробнее» или клик по названиям команд — события и составы
+    if (e.target.closest('[data-details], .match .teams')) {
+      toggleDetails(e.target.closest('[data-key]').dataset.key);
+      return;
+    }
     const a = e.target.closest('[data-play]');
     // Ctrl/Shift/средняя кнопка — как обычная ссылка, в браузере
     if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
@@ -602,6 +745,14 @@
     } else if (act === 'refresh-vk') {
       e.target.disabled = true;
       request('POST', '/api/refresh').finally(() => setTimeout(load, 1500));
+    } else if (act === 'update-download') {
+      window.mc?.downloadUpdate();
+    } else if (act === 'update-install') {
+      e.target.disabled = true;
+      window.mc?.installUpdate();
+    } else if (act === 'update-dismiss') {
+      state.updateDismissed = state.update?.version; // до следующего запуска приложения
+      renderNotices();
     }
     if (!$('#status-pop').hidden && !e.target.closest('#status-pop, #status')) togglePopover(false);
   });
@@ -656,6 +807,13 @@
     state.error = null;
     applyTheme();
     load();
+    // обновления приложения: состояние на момент загрузки страницы и дальнейшие изменения
+    const onUpdate = (u) => {
+      state.update = u?.state && u.state !== 'none' ? u : null;
+      renderNotices();
+    };
+    window.mc?.getUpdate().then(onUpdate);
+    window.mc?.onUpdate(onUpdate);
   }
   boot();
 })();
