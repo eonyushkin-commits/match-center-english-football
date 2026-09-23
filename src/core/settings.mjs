@@ -50,6 +50,7 @@ export function resolve(user = {}) {
     teamAliases,
     userAliases,
     favorites: Array.isArray(user.favorites) ? user.favorites : [],
+    favoriteMatches: freshMatches(user.favoriteMatches), // отдельные матчи с напоминанием
     refreshSeconds: clamp(user.refreshSeconds, 30, 600, defaults.refreshSeconds),
     notifications: typeof user.notifications === 'boolean' ? user.notifications : defaults.notifications,
     tray: typeof user.tray === 'boolean' ? user.tray : defaults.tray, // закрытие окна сворачивает в трей
@@ -62,6 +63,13 @@ export function resolve(user = {}) {
       window: ui.window && typeof ui.window === 'object' ? ui.window : null,
     },
   };
+}
+
+// Отмеченные матчи нужны только до начала: через сутки после него запись больше не нужна
+function freshMatches(list, now = Date.now()) {
+  return (Array.isArray(list) ? list : [])
+    .filter((m) => Number.isInteger(m?.id) && !(Date.parse(m.utcTime) < now - 24 * 3600e3))
+    .map((m) => ({ id: m.id, name: String(m.name || '').slice(0, 120), utcTime: String(m.utcTime || '') }));
 }
 
 function isAliasMap(v) {
@@ -118,6 +126,12 @@ export function applyPatch(user, patch) {
     next.favorites = patch.favorites
       .filter((f) => Number.isInteger(f?.id))
       .map((f) => ({ id: f.id, name: String(f.name || '').slice(0, 80) }));
+  }
+
+  if (patch.favoriteMatches !== undefined) {
+    if (!Array.isArray(patch.favoriteMatches)) throw invalid('favoriteMatches: ожидался список');
+    const list = freshMatches(patch.favoriteMatches);
+    next.favoriteMatches = list.length ? list : undefined;
   }
 
   if (patch.refreshSeconds !== undefined) {

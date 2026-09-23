@@ -112,11 +112,34 @@
   function toggleFavorite(id, name) {
     const favs = state.settings.favorites;
     state.settings.favorites = favs.some((f) => f.id === id) ? favs.filter((f) => f.id !== id) : [...favs, { id, name }];
-    const ids = favoriteIds();
-    for (const lg of state.day?.leagues || [])
-      for (const m of lg.matches) m.favorite = ids.has(m.home.id) || ids.has(m.away.id);
+    markFavorites();
     render();
-    request('PUT', '/api/settings', { body: { favorites: state.settings.favorites } }).then(() => { state.saveError = null; }, (e) => {
+    saveNow({ favorites: state.settings.favorites });
+  }
+
+  // 🔔 у матча: напомнить за 15 минут и в начале, даже если команды не в избранном
+  function toggleRemind(m) {
+    const list = state.settings.favoriteMatches;
+    state.settings.favoriteMatches = list.some((f) => f.id === m.id)
+      ? list.filter((f) => f.id !== m.id)
+      : [...list, { id: m.id, name: `${m.home.name} — ${m.away.name}`, utcTime: m.utcTime }];
+    markFavorites();
+    render();
+    saveNow({ favoriteMatches: state.settings.favoriteMatches });
+  }
+
+  function markFavorites() {
+    const teams = favoriteIds();
+    const matches = new Set(state.settings.favoriteMatches.map((f) => f.id));
+    for (const lg of state.day?.leagues || [])
+      for (const m of lg.matches) {
+        m.remind = matches.has(m.id);
+        m.favorite = teams.has(m.home.id) || teams.has(m.away.id) || m.remind;
+      }
+  }
+
+  function saveNow(patch) {
+    request('PUT', '/api/settings', { body: patch }).then(() => { state.saveError = null; }, (e) => {
       state.saveError = e.message;
       renderNotices();
     });
@@ -311,9 +334,12 @@
     }).join('');
     if (!chips && !m.finished && !m.cancelled) {
       const q = encodeURIComponent(`${m.home.name} ${m.away.name}`);
-      chips = `<a class="stream search" href="https://vkvideo.ru/search?q=${q}" target="_blank" rel="noopener">Искать в VK</a>`;
+      chips = `<a class="stream find" href="https://vkvideo.ru/search?q=${q}" target="_blank" rel="noopener">Искать в VK</a>`;
     }
-    return `<div class="when${live ? ' live' : ''}">${when}</div>
+    const bell = !m.started && !m.cancelled
+      ? `<button type="button" class="bell${m.remind ? ' on' : ''}" data-remind aria-pressed="${!!m.remind}"
+          title="${m.remind ? 'Не напоминать' : 'Напомнить за 15 минут и в начале матча'}">🔔</button>` : '';
+    return `<div class="when${live ? ' live' : ''}">${when}${bell}</div>
       <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
       <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}
         <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a>
@@ -565,8 +591,9 @@
           <label class="row">Перечитывать каналы VK каждые <select class="field" id="refresh">${refreshOptions.map((v) =>
             `<option value="${v}" ${v === s.refreshSeconds ? 'selected' : ''}>${v < 60 ? `${v} с` : `${+(v / 60).toFixed(1)} мин`}</option>`).join('')}</select></label>
           <label class="row"><input type="checkbox" class="switch" id="notify" ${s.notifications ? 'checked' : ''}> Уведомлять о матчах избранных команд</label>
-          <p class="hint">За 15 минут до начала, в начале матча и когда канал запускает трансляцию.
-            Избранные: ${s.favorites.length ? s.favorites.map((f) => esc(f.name)).join(', ') : 'пока нет — нажмите ★ рядом с командой'}.${window.mc ? '' : ' Уведомления работают в приложении для Windows.'}</p>
+          <p class="hint">За 15 минут до начала и в начале матча — для избранных команд (★) и отмеченных матчей (🔔).
+            Команды: ${s.favorites.length ? s.favorites.map((f) => esc(f.name)).join(', ') : 'пока нет'}.
+            Матчи: ${s.favoriteMatches.length ? s.favoriteMatches.map((f) => esc(f.name)).join(', ') : 'пока нет'}.${window.mc ? '' : ' Уведомления работают в приложении для Windows.'}</p>
           ${window.mc ? `<label class="row"><input type="checkbox" class="switch" id="tray" ${s.tray ? 'checked' : ''}> Сворачивать в трей при закрытии окна</label>
           <p class="hint">Так уведомления приходят и при закрытом окне. Выйти — правой кнопкой по значку в трее.</p>
           <label class="row"><input type="checkbox" class="switch" id="autostart" ${s.autostart ? 'checked' : ''}> Запускать вместе с Windows</label>
@@ -712,6 +739,11 @@
   $('#list').addEventListener('click', (e) => {
     const star = e.target.closest('[data-fav]');
     if (star) { toggleFavorite(Number(star.dataset.fav), star.dataset.name); return; }
+    if (e.target.closest('[data-remind]')) {
+      const m = findMatch(Number(e.target.closest('[data-key]').dataset.key.split(':')[1]));
+      if (m) toggleRemind(m);
+      return;
+    }
     const reveal = e.target.closest('[data-reveal]');
     if (reveal) {
       state.revealed.add(Number(reveal.dataset.reveal));

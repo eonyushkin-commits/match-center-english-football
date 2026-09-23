@@ -36,7 +36,7 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
     poller,
     server,
     url,
-    // уведомления о матчах избранных: { kind: soon | kickoff | stream, date, match, stream? }
+    // уведомления о матчах избранных: { kind: soon | kickoff, date, match }
     onNotify: (fn) => listeners.add(fn),
     close() {
       poller.stop();

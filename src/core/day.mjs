@@ -4,6 +4,7 @@ import { createNamer, matchStreams } from './match.mjs';
 export function buildDay({ fm, ru, settings, snapshot }) {
   const order = settings.leagues;
   const favorites = new Set(settings.favorites.map((f) => f.id));
+  const favoriteMatches = new Set(settings.favoriteMatches.map((f) => f.id));
   const namesOf = createNamer(ru, settings.teamAliases);
   const leagueId = (lg) => lg.primaryId ?? lg.id;
 
@@ -26,7 +27,9 @@ export function buildDay({ fm, ru, settings, snapshot }) {
           cancelled: !!m.status.cancelled,
           liveTime: m.status.liveTime?.short || null, // как отдаёт FotMob: «67’», «HT»
           reason: m.status.reason?.short || null, // «FT», «AET», «Pen»…
-          favorite: favorites.has(m.home.id) || favorites.has(m.away.id),
+          // избранный: одна из команд в избранном или сам матч отмечен колокольчиком
+          remind: favoriteMatches.has(m.id),
+          favorite: favorites.has(m.home.id) || favorites.has(m.away.id) || favoriteMatches.has(m.id),
           streams: matchStreams(m, namesOf(m.home), namesOf(m.away), snapshot.streams),
         })),
       };

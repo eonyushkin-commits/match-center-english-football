@@ -159,13 +159,11 @@ async function start() {
     app.quit();
   });
 
-  mc.onNotify(({ kind, date, match, stream }) => {
+  mc.onNotify(({ kind, date, match }) => {
     const title = `${match.home.name} — ${match.away.name}`;
     const minutes = Math.max(1, Math.round((Date.parse(match.utcTime) - Date.now()) / 60e3));
     const live = match.streams.find((x) => x.status === 'started');
-    const body = kind === 'soon' ? `Начало через ${minutes} мин${live ? ` · трансляция уже идёт: ${live.channel}` : ''}`
-      : kind === 'kickoff' ? `Матч начался${live ? ` · смотреть: ${live.channel}` : ''}`
-        : `Началась трансляция · ${stream.channel}`;
+    const body = kind === 'soon' ? `Начало через ${minutes} мин` : `Матч начался${live ? ` · смотреть: ${live.channel}` : ''}`;
     notify({ title, body, onClick: () => openMatch(date, match.id) });
   });
 

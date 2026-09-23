@@ -29,9 +29,9 @@ function setup(user = { favorites: [{ id: 2, name: 'Манчестер Юнай�
   };
 }
 
-test('за 15 минут, в начале матча и при запуске трансляции — по одному разу', async () => {
+test('за 15 минут и в начале матча — по одному разу; запуск трансляции не уведомляет', async () => {
   const t = setup();
-  await t.at(KICKOFF - 40 * MIN, [stream('уже-шёл')]); // шёл до запуска — молчим
+  await t.at(KICKOFF - 40 * MIN, [stream('уже-шёл')]);
   await t.at(KICKOFF - 20 * MIN, [stream('уже-шёл'), stream('новый', 'upcoming')]);
   await t.at(KICKOFF - 15 * MIN);
   await t.at(KICKOFF - 14 * MIN, [stream('уже-шёл'), stream('новый')]);
@@ -40,7 +40,18 @@ test('за 15 минут, в начале матча и при запуске т
   await t.at(KICKOFF + 1 * MIN);
   await t.at(KICKOFF + 3 * MIN);
   t.stop();
-  assert.deepEqual(t.events, ['soon', 'stream:новый', 'kickoff']);
+  assert.deepEqual(t.events, ['soon', 'kickoff']);
+});
+
+test('отмеченный колокольчиком матч уведомляет, даже если команды не в избранном', async () => {
+  // время в записи нужно только для очистки прошедших матчей (по настоящим часам), поэтому — будущее
+  const utcTime = new Date(Date.now() + 3600e3).toISOString();
+  const t = setup({ favoriteMatches: [{ id: 7, name: 'Фулхэм — Манчестер Юнайтед', utcTime }] });
+  await t.at(KICKOFF - 15 * MIN);
+  t.status.started = true;
+  await t.at(KICKOFF + 1 * MIN);
+  t.stop();
+  assert.deepEqual(t.events, ['soon', 'kickoff']);
 });
 
 test('приложение открыли за 5 минут до начала — напоминание сразу; через полчаса после — уже нет', async () => {

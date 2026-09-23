@@ -109,3 +109,16 @@ test('трей, автозапуск и режим без спойлеров', (
   assert.deepEqual([r.tray, r.autostart, r.ui.hideScores], [false, true, true]);
   assert.equal(resolve(applyPatch(user, { ui: { theme: 'dark' } })).ui.hideScores, true, 'другие правки интерфейса его не сбрасывают');
 });
+
+test('отмеченные матчи хранятся до суток после начала', () => {
+  const soon = new Date(Date.now() + 3600e3).toISOString();
+  const long = new Date(Date.now() - 3 * 24 * 3600e3).toISOString();
+  const user = applyPatch({}, { favoriteMatches: [
+    { id: 1, name: 'Фулхэм — Манчестер Юнайтед', utcTime: soon },
+    { id: 2, name: 'Давно прошедший', utcTime: long },
+    { id: 'x', name: 'без номера' },
+  ] });
+  assert.deepEqual(user.favoriteMatches.map((m) => m.id), [1]);
+  assert.deepEqual(resolve({ favoriteMatches: [{ id: 2, name: 'старый', utcTime: long }] }).favoriteMatches, []);
+  assert.equal(applyPatch(user, { favoriteMatches: [] }).favoriteMatches, undefined, 'пустой список не хранится');
+});
