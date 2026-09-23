@@ -24,8 +24,8 @@ export function buildDay({ fm, ru, settings, snapshot }) {
           started: !!m.status.started,
           finished: !!m.status.finished,
           cancelled: !!m.status.cancelled,
-          liveTime: statusRu(m.status.liveTime?.short),
-          reason: statusRu(m.status.reason?.short),
+          liveTime: m.status.liveTime?.short || null, // как отдаёт FotMob: «67’», «HT»
+          reason: m.status.reason?.short || null, // «FT», «AET», «Pen»…
           favorite: favorites.has(m.home.id) || favorites.has(m.away.id),
           streams: matchStreams(m, namesOf(m.home), namesOf(m.away), snapshot.streams),
         })),
@@ -36,10 +36,6 @@ export function buildDay({ fm, ru, settings, snapshot }) {
 }
 
 const team = (t, ru) => ({ id: t.id, name: ru.Participants?.[t.id] || t.name, score: t.score ?? null });
-
-// короткие статусы FotMob приходят по-английски; минуты («67’», «45+2’») оставляем как есть
-const STATUS_RU = { FT: 'Кон.', AET: 'Д/в', AP: 'Пен.', PEN: 'Пен.', HT: 'Пер.', AB: 'Прерв.', PP: 'Перен.', CANC: 'Отмена', TBD: '—' };
-const statusRu = (s) => (s ? STATUS_RU[s.replace(/\.$/, '').toUpperCase()] || s : null);
 
 // Дата «сегодня» в часовом поясе компьютера, в формате FotMob (ГГГГММДД)
 export function localYmd(d = new Date()) {

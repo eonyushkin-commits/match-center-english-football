@@ -15,12 +15,10 @@
   const compact = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }); // 18,5 тыс.
   const full = new Intl.NumberFormat('ru-RU'); // 18 557
 
-  // «· 1,2 тыс. смотрят» у идущего эфира, «· 18,5 тыс.» у записи; нет чисел — ничего
+  // «· 1,2 тыс. смотрят» — только у идущего эфира; у записей счётчик не показываем
   function audience(s) {
     if (s.status === 'started' && s.spectators > 0)
       return { text: ` · ${compact.format(s.spectators)} смотрят`, title: `Смотрят сейчас: ${full.format(s.spectators)}` };
-    if (s.status === 'finished' && s.views > 0)
-      return { text: ` · ${compact.format(s.views)}`, title: `Просмотров: ${full.format(s.views)}` };
     return null;
   }
 
@@ -268,7 +266,8 @@
 
   function rowHtml({ key, m, lg, showLeague }) {
     const live = isLive(m);
-    const when = m.cancelled ? 'Отмена' : live ? (m.liveTime || 'LIVE') : m.finished ? (m.reason || 'Кон.') : hhmm(m.utcTime);
+    // статус — как его отдаёт FotMob (FT, HT, AET, Pen…)
+    const when = esc(m.cancelled ? (m.reason || 'Canc.') : live ? (m.liveTime || 'LIVE') : m.finished ? (m.reason || 'FT') : hhmm(m.utcTime));
     const showScore = m.started || m.finished;
     const favs = favoriteIds();
     const team = (t, other) => {
@@ -295,7 +294,7 @@
       const q = encodeURIComponent(`${m.home.name} ${m.away.name}`);
       chips = `<a class="stream search" href="https://vkvideo.ru/search?q=${q}" target="_blank" rel="noopener">Искать в VK</a>`;
     }
-    return `<div class="when${live ? ' live' : ''}">${esc(when)}</div>
+    return `<div class="when${live ? ' live' : ''}">${when}</div>
       <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
       <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}
         <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a></div>

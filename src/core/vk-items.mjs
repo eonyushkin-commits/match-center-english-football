@@ -24,7 +24,7 @@ export function toItems(videos, ch) {
         embed: v.player || null, // официальная ссылка для встраивания, с hash
         status: status(v.live_status),
         time: t ? t * 1000 : null,
-        views: Number.isFinite(v.views) ? v.views : null, // просмотры записи (вместе с эфиром)
+        created: v.date ? v.date * 1000 : null, // когда канал создал видео — по нему упорядочены записи
         spectators: Number.isFinite(v.spectators) ? v.spectators : null, // смотрят прямо сейчас — только у эфиров
       };
     })

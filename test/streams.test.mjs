@@ -70,30 +70,32 @@ test('toItems: повторы одного видео убираются, ста
   assert.equal(items[0].time, 1758380000000);
 });
 
-test('toItems: просмотры записи и зрители эфира передаются дальше', () => {
-  const v = (id, status, extra) => ({ owner_id: -5, id, title: 'Фулхэм — Манчестер Юнайтед | АПЛ', live_status: status, date: 1758380000, ...extra });
-  const [live, record, card] = toItems([
-    v(1, 'started', { views: 900, spectators: 1234 }),
-    v(2, 'postlive', { views: 18557 }), // у записей VK не присылает spectators
-    v(3, 'postlive', {}),
+test('toItems: зрители эфира и дата создания видео передаются дальше', () => {
+  const v = (id, status, extra) => ({ owner_id: -5, id, title: 'Фулхэм — Манчестер Юнайтед | АПЛ', live_status: status, ...extra });
+  const [live, record] = toItems([
+    v(1, 'started', { spectators: 1234, date: 1758370000, live_start_time: 1758380000 }),
+    v(2, 'postlive', { views: 18557, date: 1758360000 }), // у записей VK не присылает spectators
   ], { label: 'Канал' });
-  assert.deepEqual([live.views, live.spectators], [900, 1234]);
-  assert.deepEqual([record.views, record.spectators], [18557, null]);
-  assert.deepEqual([card.views, card.spectators], [null, null]);
+  assert.equal(live.spectators, 1234);
+  assert.equal(live.created, 1758370000000, 'дата создания, а не начала эфира');
+  assert.equal(live.time, 1758380000000);
+  assert.equal(record.spectators, null);
+  assert.equal('views' in record, false, 'просмотры записей не нужны');
 });
 
-test('matchStreams: внутри статуса самый популярный эфир первым', () => {
+test('matchStreams: эфиры впереди и по зрителям, записи — по дате создания', () => {
   const m = { home: { id: 1 }, away: { id: 2 }, status: { utcTime: '2026-09-20T15:30:00Z', finished: false } };
+  const at = (hhmm) => Date.parse(`2026-09-20T${hhmm}:00Z`);
   const s = (channel, status, extra) => ({
     title: 'Фулхэм — Манчестер Юнайтед', teams: parseTeams('Фулхэм — Манчестер Юнайтед'), status, channel, url: channel,
-    time: Date.parse('2026-09-20T15:00:00Z'), views: null, spectators: null, ...extra,
+    time: at('15:00'), created: at('10:00'), spectators: null, ...extra,
   });
   const order = matchStreams(m, ['фулхэм'], ['манчестер юнайтед'], [
-    s('запись-мало', 'finished', { views: 3000 }),
-    s('эфир-мало', 'started', { spectators: 150, views: 99999 }), // у эфира считаются зрители, а не просмотры
-    s('запись-без-чисел', 'finished'),
+    s('запись-поздняя', 'finished', { created: at('14:00') }),
+    s('эфир-мало', 'started', { spectators: 150 }),
+    s('запись-ранняя', 'finished', { created: at('09:00') }),
     s('эфир-много', 'started', { spectators: 5200 }),
-    s('запись-много', 'finished', { views: 65201 }),
+    s('запись-средняя', 'finished', { created: at('12:00') }),
   ]).map((x) => x.channel);
-  assert.deepEqual(order, ['эфир-много', 'эфир-мало', 'запись-много', 'запись-мало', 'запись-без-чисел']);
+  assert.deepEqual(order, ['эфир-много', 'эфир-мало', 'запись-ранняя', 'запись-средняя', 'запись-поздняя']);
 });

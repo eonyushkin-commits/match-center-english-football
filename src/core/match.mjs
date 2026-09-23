@@ -73,8 +73,13 @@ export function createNamer(ru, aliases = {}) {
 const best = (names, s) => Math.max(0, ...names.map((n) => nameScore(n, s)));
 const RANK = { started: 0, upcoming: 1, finished: 2, failed: 3 };
 const DAY = 24 * 3600e3;
-// сколько людей выбрало эфир: у идущего — зрители сейчас, у записи — просмотры
-const audience = (s) => (s.status === 'started' ? s.spectators : s.status === 'finished' ? s.views : null) ?? -1;
+// Внутри статуса: идущие — по зрителям (популярный первым), записи — по дате создания видео,
+// запланированные — по времени начала
+function withinStatus(x, y) {
+  if (x.status === 'started') return (y.spectators ?? -1) - (x.spectators ?? -1) || (x.time ?? 0) - (y.time ?? 0);
+  if (x.status === 'finished') return (x.created ?? x.time ?? 0) - (y.created ?? y.time ?? 0);
+  return (x.time ?? 0) - (y.time ?? 0);
+}
 
 export function matchStreams(match, homeNames, awayNames, streams) {
   const kickoff = Date.parse(match.status.utcTime);
@@ -92,9 +97,7 @@ export function matchStreams(match, homeNames, awayNames, streams) {
     // Запланированный эфир у завершённого матча — резервный, который так и не запустили
     // («РЕЗЕРВ. Фулхэм – Манчестер Юнайтед»): смотреть там нечего.
     .filter((s) => !(match.status.finished && s.status === 'upcoming'))
-    // Порядок: идущие, затем запланированные, затем записи. Внутри — самый популярный первым:
-    // обычно это самая стабильная трансляция с лучшим комментатором; без чисел — по времени начала.
-    .sort((x, y) => RANK[x.status] - RANK[y.status] || audience(y) - audience(x)
-      || (x.time ?? 0) - (y.time ?? 0) || y.score - x.score)
+    // Порядок: идущие (всегда впереди), затем запланированные, затем записи
+    .sort((x, y) => RANK[x.status] - RANK[y.status] || withinStatus(x, y) || y.score - x.score)
     .map(({ teams, score, ...s }) => s);
 }
