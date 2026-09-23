@@ -53,7 +53,7 @@ async function start() {
     minWidth: 380,
     minHeight: 480,
     show: false,
-    title: TITLE,
+    title: `${TITLE} · v${app.getVersion()}`,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1116' : '#f3f5f8',
     autoHideMenuBar: true,
     // Сессия только в памяти: вход в VK внутри плеера не сохранится между запусками —
@@ -62,6 +62,7 @@ async function start() {
     webPreferences: { partition: 'matchcenter', spellcheck: false },
   });
   if (s.ui.window?.maximized) win.maximize();
+  win.on('page-title-updated', (e) => e.preventDefault()); // заголовок с версией, а не <title> страницы
   win.once('ready-to-show', () => win.show());
 
   win.webContents.setWindowOpenHandler(({ url }) => {
