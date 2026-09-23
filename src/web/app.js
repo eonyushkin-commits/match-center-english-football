@@ -369,7 +369,7 @@
     const players = (list) => `<ol>${list.map((p) => `<li><span class="num">${esc(p.number)}</span>${esc(p.name)}</li>`).join('')}</ol>`;
     const team = (t, name) => `<div class="lu"><div class="luhead"><b>${esc(name)}</b>${t.formation ? `<span>${esc(t.formation)}</span>` : ''}</div>
       ${players(t.starters)}${t.coach ? `<div class="coach">Тренер: ${esc(t.coach)}</div>` : ''}
-      ${t.subs.length ? `<details><summary>Запасные · ${t.subs.length}</summary>${players(t.subs)}</details>` : ''}</div>`;
+      ${t.subs.length ? `<details${state.details?.subsOpen ? ' open' : ''}><summary>Запасные · ${t.subs.length}</summary>${players(t.subs)}</details>` : ''}</div>`;
     return `<div class="lineups">${team(l.home, m.home.name)}${team(l.away, m.away.name)}</div>`;
   }
 
@@ -730,6 +730,15 @@
     if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
     if (openPlayer(a.closest('[data-key]').dataset.key, Number(a.dataset.play))) e.preventDefault();
   });
+
+  // «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.
+  // Событие toggle не всплывает — ловим на погружении.
+  $('#list').addEventListener('toggle', (e) => {
+    if (!e.target.matches?.('.lu details')) return;
+    const open = e.target.open;
+    if (state.details) state.details.subsOpen = open;
+    for (const d of e.target.closest('.lineups').querySelectorAll('details')) if (d.open !== open) d.open = open;
+  }, true);
 
   document.addEventListener('click', (e) => {
     const act = e.target.closest('[data-action]')?.dataset.action;
