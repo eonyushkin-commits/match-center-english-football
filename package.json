@@ -1,7 +1,7 @@
 {
   "name": "match-center-english-football",
   "productName": "Матч-центр",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Матч-центр по английскому футболу: расписание FotMob и трансляции из VK Видео",
   "main": "src/electron/main.cjs",
   "type": "commonjs",
