@@ -6,13 +6,18 @@ export const parseYmd = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.s
 export const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
 export const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
 
-// Полоса дат — календарная неделя (пн–вс) выбранного дня; offset — сколько дней от сегодня
-export function weekOf(today, date) {
-  const monday = addDays(date, -((parseYmd(date).getDay() + 6) % 7));
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(monday, i);
+// Полоса дат: size дней подряд с первого start. Сдвигается, только когда выбранный день уходит
+// за край, — клик по видимому дню её не двигает. Без start (запуск, переход из календаря)
+// выбранный день в середине. offset — сколько дней от сегодня.
+export function dateStrip(today, date, start, size = 7) {
+  if (!start) start = addDays(date, -Math.floor(size / 2));
+  else if (daysBetween(start, date) < 0) start = date;
+  else if (daysBetween(start, date) >= size) start = addDays(date, 1 - size);
+  const days = Array.from({ length: size }, (_, i) => {
+    const d = addDays(start, i);
     return { date: d, offset: daysBetween(today, d) };
   });
+  return { start, days };
 }
 
 export const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
