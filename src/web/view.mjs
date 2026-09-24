@@ -103,18 +103,28 @@ export function detailsHtml(m, d, hidden) {
 }
 
 // ---------- обновление приложения: «Скачать» → «Установить» ----------
+// Крестик прячет полосу до следующего шага (загрузилось, ошибка) или до перезапуска приложения
+export const updateKey = (u) => `${u.version}:${u.state}`;
+const HIDE = {
+  available: 'Скрыть — напомню при следующем запуске',
+  downloading: 'Скрыть — загрузка продолжится',
+  ready: 'Скрыть — обновление установится при выходе из приложения',
+  error: 'Скрыть',
+};
+
 export function updateHtml(u) {
+  if (!HIDE[u.state]) return null;
   const v = esc(u.version);
   const notes = u.notes ? ` <a href="${esc(u.notes)}" target="_blank" rel="noopener">Что нового ↗</a>` : '';
+  const hide = `<button type="button" class="icon-btn" data-action="update-dismiss" aria-label="Скрыть" title="${HIDE[u.state]}">✕</button>`;
   if (u.state === 'available') return `<span><b>Доступна версия ${v}.</b>${notes}</span>
-    <span class="actions"><button type="button" class="btn primary" data-action="update-download">Скачать</button>
-    <button type="button" class="icon-btn" data-action="update-dismiss" aria-label="Напомнить позже" title="Напомнить позже">✕</button></span>`;
-  if (u.state === 'downloading') return `<span><b>Загружается версия ${v}…</b> ${u.percent || 0}%</span><progress max="100" value="${u.percent || 0}"></progress>`;
+    <span class="actions"><button type="button" class="btn primary" data-action="update-download">Скачать</button>${hide}</span>`;
+  if (u.state === 'downloading') return `<span><b>Загружается версия ${v}…</b> ${u.percent || 0}%</span><progress max="100" value="${u.percent || 0}"></progress>
+    <span class="actions">${hide}</span>`;
   if (u.state === 'ready') return `<span><b>Версия ${v} загружена.</b> Приложение перезапустится — открытая трансляция прервётся.${notes}</span>
-    <span class="actions"><button type="button" class="btn primary" data-action="update-install">Установить</button></span>`;
-  if (u.state === 'error') return `<span><b>Не удалось загрузить обновление:</b> ${esc(u.error)}</span>
-    <span class="actions"><button type="button" class="btn" data-action="update-download">Повторить</button></span>`;
-  return null;
+    <span class="actions"><button type="button" class="btn primary" data-action="update-install">Установить</button>${hide}</span>`;
+  return `<span><b>Не удалось загрузить обновление:</b> ${esc(u.error)}</span>
+    <span class="actions"><button type="button" class="btn" data-action="update-download">Повторить</button>${hide}</span>`;
 }
 
 // Полосы над списком: обновление, ошибки, недоступные источники → [[класс, html], …]
@@ -127,7 +137,7 @@ export function notices({ error, day, status, saveError, update: u, updateDismis
   if (vk?.ready && vk.channels.length && vk.channels.every((c) => c.ok === false))
     out.push(['bad', '<b>Не удалось прочитать ни один канал VK.</b> Каналы читаются только с российского адреса. <button type="button" data-action="status">Подробнее</button>']);
   if (saveError) out.push(['bad', `<b>Не удалось сохранить настройки:</b> ${esc(saveError)}`]);
-  const update = u && !(u.state === 'available' && updateDismissed === u.version) && updateHtml(u);
+  const update = u && updateDismissed !== updateKey(u) && updateHtml(u);
   if (update) out.unshift(['update', update]);
   return out;
 }

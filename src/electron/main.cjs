@@ -253,7 +253,10 @@ async function checkUpdatesNow() {
     const r = await updater.checkForUpdates();
     const latest = r?.updateInfo?.version;
     if (!latest || latest === app.getVersion()) dialog.showMessageBox(win, { message: `У вас последняя версия (${app.getVersion()}).` });
-    else showWindow(); // о новой версии скажет полоса в окне
+    else {
+      showWindow(); // о новой версии скажет полоса в окне — даже если её скрыли крестиком
+      win?.webContents.send('update', { ...update, manual: true });
+    }
   } catch (e) {
     dialog.showMessageBox(win, { type: 'warning', message: 'Не удалось проверить обновления', detail: e.message });
   }

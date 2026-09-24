@@ -170,19 +170,25 @@ test('detailsHtml: «Запасные» открыты у обеих коман�
 });
 
 // ---------- view: полосы и статус ----------
-test('updateHtml: «Скачать» → прогресс → «Установить»', () => {
+test('updateHtml: «Скачать» → прогресс → «Установить», крестик на каждом шаге', () => {
   assert.match(updateHtml({ state: 'available', version: '3.0.0' }), /Доступна версия 3\.0\.0.*update-download/s);
   assert.match(updateHtml({ state: 'downloading', version: '3.0.0', percent: 37 }), /37%.*value="37"/);
   assert.match(updateHtml({ state: 'ready', version: '3.0.0' }), /update-install/);
+  for (const state of ['available', 'downloading', 'ready', 'error'])
+    assert.match(updateHtml({ state, version: '3.0.0', error: 'x' }), /data-action="update-dismiss"/, state);
   assert.equal(updateHtml({ state: 'none' }), null);
 });
 
-test('notices: обновление первым, «напомнить позже» прячет только эту версию', () => {
+test('notices: обновление первым; крестик прячет полосу до следующего шага', () => {
   const update = { state: 'available', version: '3.0.0' };
   const base = { error: 'сеть', day: {}, status: null, saveError: null, update };
-  assert.deepEqual(notices(base).map(([cls]) => cls), ['update', 'bad']);
-  assert.deepEqual(notices({ ...base, updateDismissed: '3.0.0' }).map(([cls]) => cls), ['bad']);
-  assert.deepEqual(notices({ ...base, updateDismissed: '3.0.0', update: { ...update, state: 'ready' } }).map(([cls]) => cls), ['update', 'bad']);
+  const kinds = (o) => notices({ ...base, ...o }).map(([cls]) => cls);
+  assert.deepEqual(kinds({}), ['update', 'bad']);
+  assert.deepEqual(kinds({ updateDismissed: '3.0.0:available' }), ['bad']);
+  assert.deepEqual(kinds({ updateDismissed: '3.0.0:downloading', update: { ...update, state: 'downloading', percent: 60 } }), ['bad']);
+  assert.deepEqual(kinds({ updateDismissed: '3.0.0:downloading', update: { ...update, state: 'ready' } }), ['update', 'bad']);
+  assert.deepEqual(kinds({ updateDismissed: '3.0.0:ready', update: { ...update, state: 'ready' } }), ['bad']);
+  assert.deepEqual(kinds({ updateDismissed: '3.0.0:available', update: { ...update, version: '3.0.1' } }), ['update', 'bad']);
 });
 
 test('notices: предупреждение, когда не читается ни один канал', () => {

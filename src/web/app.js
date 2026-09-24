@@ -4,7 +4,7 @@ import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
 import { addDays, embedUrl, esc, parseYmd, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
-import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge } from './view.mjs';
+import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -25,7 +25,7 @@ const state = {
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
-  updateDismissed: null, // версия, о которой попросили пока не напоминать
+  updateDismissed: null, // «версия:шаг» скрытой крестиком полосы обновления — до следующего шага или перезапуска
 };
 let playerEl = null;
 
@@ -472,7 +472,7 @@ document.addEventListener('click', (e) => {
     e.target.disabled = true;
     window.mc?.installUpdate();
   } else if (act === 'update-dismiss') {
-    state.updateDismissed = state.update?.version; // до следующего запуска приложения
+    if (state.update) state.updateDismissed = updateKey(state.update);
     renderNotices();
   }
   if (!$('#status-pop').hidden && !e.target.closest('#status-pop, #status')) togglePopover(false);
@@ -531,6 +531,7 @@ async function boot() {
   // обновления приложения: состояние на момент загрузки страницы и дальнейшие изменения
   const onUpdate = (u) => {
     state.update = u?.state && u.state !== 'none' ? u : null;
+    if (u?.manual) state.updateDismissed = null; // проверили из меню — полосу показываем снова
     renderNotices();
   };
   window.mc?.getUpdate().then(onUpdate);
