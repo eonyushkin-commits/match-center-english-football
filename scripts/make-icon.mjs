@@ -2,10 +2,10 @@
 //   build/icon.png        1024 — для установщика и .exe (electron-builder делает из неё .ico)
 //   src/electron/icon.png  256 — окно, трей, уведомления
 //   src/web/icon.png       128 — вкладка и логотип в шапке
-// Всё вне фигуры становится прозрачным. Контур меряем по самой картинке — по лучам из центра, —
-// поэтому он точно повторяет край сглаженного квадрата («сквиркла»). Где белый рисунок сливается
-// с белым фоном (флаг у края), край по цвету не найти — там его берём с симметричного участка
-// фигуры. Запуск: npm run icon
+// Всё вне фигуры становится прозрачным. Край меряем по лучам из центра и подбираем по замерам
+// гладкую фигуру — суперэллипс («сквиркл») или квадрат со скруглёнными углами. Маска строится по
+// этой фигуре, а не по пикселям, поэтому она ровная и без выемок, а там, где белый рисунок
+// сливается с белым фоном и край по цвету не найти, фигура просто продолжается. Запуск: npm run icon
 import { app, BrowserWindow } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -50,19 +50,56 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
         if (run === RUN) { r[i] = rr + 0.5 * (RUN - 1) + 0.5; break; }
       }
     }
-    // 2. где белый рисунок сливается с белым фоном, замер «проваливается» внутрь на десятки пикселей —
-    // там край берём с симметричного луча квадратной фигуры (отражения и поворот на 90°).
-    // Остальной край идёт ровно по замеру: фигура симметрична не идеально (углы снизу чуть острее).
-    const DIP = 20;
-    let fixed = 0;
-    const edge = Float64Array.from(r, (ri, i) => {
-      if (w !== h) return ri;
-      const m = (k) => ((k % N) + N) % N;
-      const sym = Math.max(...[i, -i, N / 2 - i, N / 2 + i, N / 4 - i, N / 4 + i, (3 * N) / 4 - i, (3 * N) / 4 + i].map((k) => r[m(k)]));
-      if (ri >= sym - DIP) return ri;
-      fixed++;
-      return sym;
-    });
+    // 2. по замерам подбираем гладкую фигуру: суперэллипс |x|^n + |y|^n = s^n или квадрат со
+    // скруглёнными углами радиуса R. Где белый рисунок сливается с белым фоном, замер «проваливается»
+    // внутрь — такие лучи в подбор не попадают: сначала подбор по медиане ошибок (устойчив, пока
+    // провалов меньше половины), потом уточнение только по лучам, совпавшим с фигурой до 1,5 px.
+    const angle = (i) => (2 * Math.PI * i) / N;
+    const models = {
+      superellipse: (n, sc) => (i) => { const a = angle(i); return sc * Math.pow(Math.pow(Math.abs(Math.cos(a)), n) + Math.pow(Math.abs(Math.sin(a)), n), -1 / n); },
+      roundrect: (R, sc) => (i) => {
+        const a = angle(i), c = Math.abs(Math.cos(a)), si = Math.abs(Math.sin(a)), k = sc - R;
+        // луч из центра до скруглённого квадрата с половиной стороны sc
+        const flat = Math.min(c > 1e-9 ? sc / c : Infinity, si > 1e-9 ? sc / si : Infinity);
+        const px = flat * c, py = flat * si;
+        if (px <= k || py <= k) return flat;
+        const b = k * (c + si), disc = b * b - (2 * k * k - R * R);
+        return b + Math.sqrt(Math.max(0, disc));
+      },
+    };
+    const measured = [];
+    for (let i = 0; i < N; i += 4) if (r[i] > 0) measured.push(i);
+    const errorsOf = (fn, list) => list.map((i) => Math.abs(r[i] - fn(i)));
+    const median = (arr) => { const a = [...arr].sort((p, q) => p - q); return a[a.length >> 1]; };
+    let best = null;
+    const half = Math.min(w, h) / 2;
+    for (const [kind, make, lo, hi, step] of [['superellipse', models.superellipse, 2, 12, 0.05], ['roundrect', models.roundrect, 0, half, 1]]) {
+      for (let p = lo; p <= hi; p += step) {
+        for (let sc = half - 12; sc <= half + 2; sc += 0.5) {
+          const e = median(errorsOf(make(p, sc), measured));
+          if (!best || e < best.e) best = { kind, p, sc, e };
+        }
+      }
+    }
+    // уточнение по совпавшим лучам — мелким шагом вокруг найденного
+    const make = models[best.kind];
+    const inliers = [];
+    for (let i = 0; i < N; i++) if (r[i] > 0 && Math.abs(r[i] - make(best.p, best.sc)(i)) < 1.5) inliers.push(i);
+    const pStep = best.kind === 'superellipse' ? 0.005 : 0.1;
+    let fine = null;
+    for (let p = best.p - 20 * pStep; p <= best.p + 20 * pStep; p += pStep) {
+      for (let sc = best.sc - 1; sc <= best.sc + 1; sc += 0.05) {
+        const fn = make(p, sc);
+        let sum = 0;
+        for (const i of inliers) sum += (r[i] - fn(i)) ** 2;
+        const rms = Math.sqrt(sum / inliers.length);
+        if (!fine || rms < fine.rms) fine = { p, sc, rms };
+      }
+    }
+    const model = make(fine.p, fine.sc);
+    const edge = Float64Array.from({ length: N }, (_, i) => model(i));
+    const fixed = N - inliers.length; // лучей, где край взят из подбора, а не из замера
+
     // 3. контур со сдвигом внутрь на inset: край исходника сглажен с белым фоном
     const shape = Array.from(edge, (ri, i) => {
       const a = (2 * Math.PI * i) / N, rr = Math.max(0, ri - inset);
@@ -110,7 +147,7 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
       for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
       list.push(btoa(s));
     }
-    resolve({ list, shape: { radius, rays: N, fixedBySymmetry: fixed } });
+    resolve({ list, shape: { фигура: best.kind, параметр: +fine.p.toFixed(3), половина_стороны: +fine.sc.toFixed(2), rms_px: +fine.rms.toFixed(2), лучей_совпало: inliers.length, лучей_всего: N } });
   };
   img.src = dataUrl;
 });
