@@ -24,7 +24,7 @@
   const frame = document.createElement('iframe');
   frame.src = src;
   frame.title = title;
-  frame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+  frame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock'; // wake-lock — экран не гаснет во время матча
   frame.allowFullscreen = true;
   document.body.prepend(frame);
 

@@ -329,7 +329,7 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
       <a class="ext" href="${esc(withTime(s.url, t))}" target="_blank" rel="noopener">Открыть в VK ↗</a>
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-    <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></iframe></div>
+    <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock"></iframe></div>
     <button type="button" class="pmore" data-details aria-expanded="false">События и составы</button>
   </div></div>`;
   el.addEventListener('transitionend', (e) => {
