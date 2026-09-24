@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fotmobTime, parseKickoffs } from '../src/core/details.mjs';
-import { eventMoment, matchMinute, recordSecond, withTime } from '../src/web/format.mjs';
+import { eventMoment, recordSecond, withTime } from '../src/web/format.mjs';
 import { detailsHtml } from '../src/web/view.mjs';
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -48,10 +48,7 @@ test('recordSecond: свисток — 20:14 у Английского Акце�
   assert.equal(recordSecond(rec({ time: null }), k.h1), null);
 });
 
-test('matchMinute и withTime', () => {
-  assert.equal(matchMinute(k, k.h1 + 11.5 * 60e3), 12);
-  assert.equal(matchMinute(k, k.h2 + 60e3), 47);
-  assert.equal(matchMinute(k, k.h1 - 1), null);
+test('withTime', () => {
   assert.equal(withTime('https://vkvideo.ru/video_ext.php?oid=-1&id=2', 1214), 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&t=20m14s');
   assert.equal(withTime('https://vkvideo.ru/live-1_2', 370), 'https://vkvideo.ru/live-1_2?t=6m10s');
   assert.equal(withTime('https://vkvideo.ru/live-1_2', null), 'https://vkvideo.ru/live-1_2');
@@ -62,14 +59,6 @@ const goal = { kind: 'goal', minute: '45+4', min: 45, plus: 4, side: 'away', pla
 const match = (streams) => ({ id: 1, home: { name: 'Тоттенхэм' }, away: { name: 'Астон Вилла' }, streams });
 const details = (o = {}) => ({ data: { state: 'finished', events: [goal], lineups: null, kickoffs: k, ...o } });
 
-test('detailsHtml: кнопки «с начала матча» у записей, поздний эфир — с минутой', () => {
-  const m = match([rec(), rec({ channel: 'Sportcast', time: k.h1 + 11.5 * 60e3 }), rec({ channel: 'X', status: 'started' })]);
-  const html = detailsHtml(m, details(), false);
-  assert.match(html, /data-seek="0:1214">Английский Акцент</);
-  assert.match(html, /data-seek="1:0" title="Эфир начался на 12-й минуте">Sportcast · с 12’/);
-  assert.doesNotMatch(html, /data-seek="2:/, 'у идущего эфира кнопки нет');
-});
-
 test('detailsHtml: ▶ у гола — в открытой записи, если момент в ней есть', () => {
   const m = match([rec(), rec({ channel: 'ВЫШЛИ!', time: Date.parse('2026-09-19T11:25:02Z') })]);
   // 45+4 → 48:40 от свистка: 1214 + 2920 у первой записи, 370 + 2920 у второй
@@ -78,8 +67,8 @@ test('detailsHtml: ▶ у гола — в открытой записи, есл�
   assert.doesNotMatch(detailsHtml(m, details({ kickoffs: null }), false), /data-seek/, 'без времени таймов — без переходов');
 });
 
-test('detailsHtml: без спойлеров — начало матча есть, голов нет', () => {
+test('detailsHtml: без спойлеров голов с переходами нет', () => {
   const html = detailsHtml(match([rec()]), details(), true);
-  assert.match(html, /data-seek="0:1214"/);
-  assert.doesNotMatch(html, /class="seek"|Буэндиа/);
+  assert.doesNotMatch(html, /data-seek|Буэндиа/);
+  assert.doesNotMatch(detailsHtml(match([rec()]), details(), false), /Смотреть с начала матча/);
 });

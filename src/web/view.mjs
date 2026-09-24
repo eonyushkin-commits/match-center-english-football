@@ -1,5 +1,5 @@
 // Разметка: данные → HTML-строка. Без DOM и без общего состояния — всё нужное приходит аргументами.
-import { STATUS, audience, esc, eventMoment, hhmm, isLive, matchMinute, recordSecond } from './format.mjs';
+import { STATUS, audience, esc, eventMoment, hhmm, isLive, recordSecond } from './format.mjs';
 
 // Шапка раздела: «Сейчас в эфире» или турнир с логотипом
 export function sectionHeadHtml(s) {
@@ -91,21 +91,6 @@ function lineupsHtml(l, m, subsOpen) {
   return `<div class="lineups">${team(l.home, m.home.name)}${team(l.away, m.away.name)}</div>`;
 }
 
-// Записи матча с первого свистка. Эфир, начатый после свистка, — с начала и с подписью минуты.
-function recordingsHtml(m, k) {
-  if (!k?.h1) return '';
-  const labels = streamLabels(m.streams);
-  const buttons = m.streams.map((s, i) => {
-    if (s.status !== 'finished' || !s.time || !s.embed) return '';
-    const sec = recordSecond(s, k.h1);
-    if (sec != null) return `<button type="button" class="btn" data-seek="${i}:${sec}">${esc(labels[i])}</button>`;
-    if (s.time < k.h1) return ''; // закончилась до свистка — видимо, превью или обрыв
-    const late = matchMinute(k, s.time);
-    return `<button type="button" class="btn" data-seek="${i}:0" title="Эфир начался на ${late}-й минуте">${esc(labels[i])} · с ${late}’</button>`;
-  }).join('');
-  return buttons ? `<div class="recs"><span>Смотреть с начала матча</span>${buttons}</div>` : '';
-}
-
 // Запись с моментом гола: сначала та, что уже открыта в плеере, иначе первая, где он есть
 function goalSeek(m, k, e, playing) {
   const at = eventMoment(k, e.min, e.plus);
@@ -130,7 +115,7 @@ export function detailsHtml(m, d, hidden, playing = null) {
   else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
   else events = `<ol class="timeline">${x.events.map((e) => eventHtml(e, e.kind === 'goal' ? goalSeek(m, x.kickoffs, e, playing) : null)).join('')}</ol>${x.delayed ? '<div class="dnote small">С задержкой в минуту, чтобы не обгонять трансляцию.</div>' : ''}`;
   const lineups = x.lineups ? lineupsHtml(x.lineups, m, d.subsOpen) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
-  return `<div class="dinner">${recordingsHtml(m, x.kickoffs)}<h4>События</h4>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
+  return `<div class="dinner"><h4>События</h4>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
 }
 
 // ---------- обновление приложения: «Скачать» → «Установить» ----------

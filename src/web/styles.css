@@ -250,10 +250,6 @@ textarea.field { height: auto; padding: 8px 10px; width: 100%; resize: vertical;
 .ev .evscore { min-width: 28px; }
 .ev .seek { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-size: 9px; line-height: 1; padding: 0 0 0 2px; }
 .ev .seek:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.recs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 10px; font-size: 13px; }
-.recs > span { color: var(--muted); margin-right: 4px; }
-.recs .btn { height: 28px; padding: 0 10px; font-size: 13px; background: var(--surface); }
-.recs .btn::before { content: "▶ "; color: var(--accent); font-size: 10px; }
 .evtext small { display: block; color: var(--faint); font-size: 11px; }
 .ev.sub .evtext span::before { content: "↑ "; color: var(--accent); }
 .ev.sub .evtext small::before { content: "↓ "; color: var(--live); }

@@ -2,7 +2,7 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, dateStrip, embedUrl, esc, parseYmd, withTime, ymd } from './format.mjs';
+import { addDays, dateStrip, embedUrl, esc, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
@@ -21,7 +21,7 @@ const state = {
   date: ymd(new Date()),
   stripStart: null, // первый день полосы дат; null — выбранный день в середине
   q: '',
-  player: null, // { rowKey, i, t } — t: с какой секунды открыта запись
+  player: null, // { rowKey, i, t, autoplay } — t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
@@ -242,6 +242,19 @@ function toggleDetails(rowKey) {
   if (state.details) loadDetails();
 }
 
+// Фактическое начало таймов матча (из подробностей) — чтобы открывать записи сразу на свистке
+const kickoffs = new Map(); // id матча → { h1, h2, e1, e2 } | null
+async function kickoffsOf(id) {
+  if (!kickoffs.has(id)) {
+    try {
+      kickoffs.set(id, (await request('GET', `/api/match?id=${id}`)).kickoffs || null);
+    } catch {
+      return null; // нет ответа — откроем запись с начала, а спросим в следующий раз
+    }
+  }
+  return kickoffs.get(id);
+}
+
 async function loadDetails() {
   const d = state.details;
   if (!d) return;
@@ -249,6 +262,7 @@ async function loadDetails() {
   try {
     d.data = await request('GET', `/api/match?id=${d.id}`);
     d.error = null;
+    if (d.data.kickoffs) kickoffs.set(d.id, d.data.kickoffs);
   } catch (e) {
     d.error = e.message;
   }
@@ -281,23 +295,23 @@ function findMatch(id) {
   return null;
 }
 
-// Запись с нужной секунды запускается сама, иначе после перехода к голу видна обложка.
-// Без mute=0 плеер VK при автозапуске выключает звук.
-const playerSrc = (embed, t) => (t == null ? embed : `${withTime(embed, t)}&autoplay=1&mute=0`);
+// t — с какой секунды открыть запись; autoplay — запустить сразу (переход к голу: иначе видна
+// обложка). Без mute=0 плеер VK при автозапуске выключает звук.
+const playerSrc = (embed, t, autoplay) => `${withTime(embed, t)}${autoplay ? '&autoplay=1&mute=0' : ''}`;
 
-// t — с какой секунды открыть запись (начало матча, гол); без него — как обычно
-function openPlayer(rowKey, i, t = null) {
+// t — с какой секунды открыть запись (свисток, гол); без него — как обычно
+function openPlayer(rowKey, i, t = null, autoplay = false) {
   const m = findMatch(Number(rowKey.split(':')[1]));
   const s = m?.streams[i];
   const embed = s && embedUrl(s);
   if (!embed) return false;
-  const src = playerSrc(embed, t);
+  const src = playerSrc(embed, t, autoplay);
 
   // тот же матч — переключаем канал или момент без анимации; повторный клик по эфиру закрывает плеер
   if (playerEl && state.player?.rowKey === rowKey) {
     if (state.player.i === i && t == null) closePlayer();
     else {
-      state.player = { rowKey, i, t };
+      state.player = { rowKey, i, t, autoplay };
       playerEl.querySelector('iframe').src = src;
       playerEl.querySelector('.ext').href = withTime(s.url, t);
       render();
@@ -307,7 +321,7 @@ function openPlayer(rowKey, i, t = null) {
   }
   if (playerEl) playerEl.remove();
 
-  state.player = { rowKey, i, t };
+  state.player = { rowKey, i, t, autoplay };
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
@@ -358,7 +372,7 @@ function popOut() {
   const s = m?.streams[state.player.i];
   const embed = s && embedUrl(s);
   if (!embed) return;
-  const src = playerSrc(embed, state.player.t);
+  const src = playerSrc(embed, state.player.t, state.player.autoplay);
   const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   closePlayer(); // в двух местах сразу один эфир не нужен
@@ -459,11 +473,11 @@ $('#list').addEventListener('click', (e) => {
     if (m) toggleRemind(m);
     return;
   }
-  // «С начала матча» и ▶ у гола: запись этого матча с нужной секунды
+  // ▶ у гола: запись этого матча с нужной секунды, сразу со звуком
   const seek = e.target.closest('[data-seek]');
   if (seek && state.details) {
     const [i, t] = seek.dataset.seek.split(':').map(Number);
-    openPlayer(state.details.rowKey, i, t);
+    openPlayer(state.details.rowKey, i, t, true);
     return;
   }
   const reveal = e.target.closest('[data-reveal]');
@@ -482,7 +496,17 @@ $('#list').addEventListener('click', (e) => {
   const a = e.target.closest('[data-play]');
   // Ctrl/Shift/средняя кнопка — как обычная ссылка, в браузере
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-  if (openPlayer(a.closest('[data-key]').dataset.key, Number(a.dataset.play))) e.preventDefault();
+  const rowKey = a.closest('[data-key]').dataset.key;
+  const i = Number(a.dataset.play);
+  const m = findMatch(Number(rowKey.split(':')[1]));
+  const s = m?.streams[i];
+  if (!s || !embedUrl(s)) return; // встроить нельзя — откроется ссылкой в браузере
+  e.preventDefault();
+  // повторный клик по открытому эфиру закрывает плеер
+  if (state.player?.rowKey === rowKey && state.player.i === i) { closePlayer(); return; }
+  if (s.status !== 'finished') { openPlayer(rowKey, i); return; }
+  // запись — на первом свистке, запуск по кнопке плеера; эфир, начатый после свистка, — с начала
+  kickoffsOf(m.id).then((k) => openPlayer(rowKey, i, recordSecond(s, k?.h1)));
 });
 
 // «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.

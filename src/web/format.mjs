@@ -58,12 +58,6 @@ export function eventMoment(kickoffs, min, plus = 0) {
   return start ? start + Math.max(0, min - base - 1 + plus) * 60e3 + LEAD_MS : null;
 }
 
-// Минута матча в момент at — для подписи «эфир начался на 12-й минуте»
-export function matchMinute(kickoffs, at) {
-  const [half, base] = HALVES.find(([h]) => kickoffs?.[h] && kickoffs[h] <= at) || [];
-  return half ? base + Math.floor((at - kickoffs[half]) / 60e3) + 1 : null;
-}
-
 // Секунда записи, на которой момент at; null — это не запись или она его не застала
 export function recordSecond(s, at) {
   if (s.status !== 'finished' || !s.time || at == null) return null;
