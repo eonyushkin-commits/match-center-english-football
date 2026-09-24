@@ -10,7 +10,7 @@ const STATIC = {
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
-  '/icon.png': ['icon.png', 'image/png'],
+  '/icon.svg': ['icon.svg', 'image/svg+xml'],
   '/player.html': ['player.html', 'text/html; charset=utf-8'],
   '/player.js': ['player.js', 'text/javascript; charset=utf-8'],
 };
