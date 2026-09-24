@@ -270,13 +270,17 @@ function findMatch(id) {
   return null;
 }
 
+// Запись с нужной секунды запускается сама, иначе после перехода к голу видна обложка.
+// Без mute=0 плеер VK при автозапуске выключает звук.
+const playerSrc = (embed, t) => (t == null ? embed : `${withTime(embed, t)}&autoplay=1&mute=0`);
+
 // t — с какой секунды открыть запись (начало матча, гол); без него — как обычно
 function openPlayer(rowKey, i, t = null) {
   const m = findMatch(Number(rowKey.split(':')[1]));
   const s = m?.streams[i];
   const embed = s && embedUrl(s);
   if (!embed) return false;
-  const src = withTime(embed, t);
+  const src = playerSrc(embed, t);
 
   // тот же матч — переключаем канал или момент без анимации; повторный клик по эфиру закрывает плеер
   if (playerEl && state.player?.rowKey === rowKey) {
@@ -340,7 +344,7 @@ function popOut() {
   const s = m?.streams[state.player.i];
   const embed = s && embedUrl(s);
   if (!embed) return;
-  const src = withTime(embed, state.player.t);
+  const src = playerSrc(embed, state.player.t);
   const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   closePlayer(); // в двух местах сразу один эфир не нужен
