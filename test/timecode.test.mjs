@@ -28,13 +28,13 @@ test('parseKickoffs: таймы в UTC; без начала матча или с
   assert.equal(parseKickoffs({ header: { status: { utcTime: '2026-09-19T11:30:00Z', halfs: { firstHalfStarted: '19.09.2026 23:31:12' } } } }), null);
 });
 
-test('eventMoment: начало минуты гола от начала своего тайма', () => {
-  const min = (m, plus) => (eventMoment(k, m, plus) - k.h1) / 60e3;
-  assert.equal(min(1), 0);
-  assert.equal(min(34), 33);
-  assert.equal(min(45, 4), 48, '45+4 — ещё первый тайм');
-  assert.equal((eventMoment(k, 46) - k.h2) / 60e3, 0);
-  assert.equal((eventMoment(k, 90, 8) - k.h2) / 60e3, 52);
+test('eventMoment: начало минуты гола от начала своего тайма + 40 с на отставание эфира', () => {
+  const sec = (m, plus) => (eventMoment(k, m, plus) - k.h1) / 1000;
+  assert.equal(sec(1), 40);
+  assert.equal(sec(34), 33 * 60 + 40);
+  assert.equal(sec(45, 4), 48 * 60 + 40, '45+4 — ещё первый тайм');
+  assert.equal((eventMoment(k, 46) - k.h2) / 1000, 40);
+  assert.equal((eventMoment(k, 90, 8) - k.h2) / 1000, 52 * 60 + 40);
   assert.equal(eventMoment(k, 95), null, 'доп. времени не было');
   assert.equal(eventMoment(null, 10), null);
 });
@@ -72,9 +72,9 @@ test('detailsHtml: кнопки «с начала матча» у записей
 
 test('detailsHtml: ▶ у гола — в открытой записи, если момент в ней есть', () => {
   const m = match([rec(), rec({ channel: 'ВЫШЛИ!', time: Date.parse('2026-09-19T11:25:02Z') })]);
-  // 45+4 → 48:00 от свистка: 1214 + 2880 у первой записи, 370 + 2880 у второй
-  assert.match(detailsHtml(m, details(), false), /class="seek" data-seek="0:4094"/);
-  assert.match(detailsHtml(m, details(), false, 1), /class="seek" data-seek="1:3250"/);
+  // 45+4 → 48:40 от свистка: 1214 + 2920 у первой записи, 370 + 2920 у второй
+  assert.match(detailsHtml(m, details(), false), /class="seek" data-seek="0:4134"/);
+  assert.match(detailsHtml(m, details(), false, 1), /class="seek" data-seek="1:3290"/);
   assert.doesNotMatch(detailsHtml(m, details({ kickoffs: null }), false), /data-seek/, 'без времени таймов — без переходов');
 });
 
