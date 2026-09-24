@@ -10,7 +10,7 @@ const match = (o = {}) => ({
   id: 1, utcTime: '2026-09-20T14:00:00Z', started: false, finished: false, cancelled: false,
   home: { id: 10, name: 'Челси', score: 0 }, away: { id: 20, name: 'Арсенал', score: 0 }, streams: [], ...o,
 });
-const view = (o = {}) => ({ favIds: new Set(), hidden: () => false, player: null, detailsKey: null, ...o });
+const view = (o = {}) => ({ favIds: new Set(), hidden: () => false, player: null, ...o });
 const row = (m) => rowHtml({ key: `m:${m.id}`, m, lg: { name: 'Премьер-лига' } }, view());
 
 // ---------- format ----------
@@ -140,14 +140,14 @@ test('rowHtml: «Искать в VK» только у не сыгранного 
   assert.doesNotMatch(row(match({ finished: true })), /Искать в VK|class="streams"/);
 });
 
-test('rowHtml: избранное, активный эфир и раскрытые подробности', () => {
+test('rowHtml: избранное и активный эфир, без кнопки «Подробнее»', () => {
   const m = match({ streams: [stream(), stream()] });
-  const html = rowHtml({ key: 'm:1', m, lg: {} }, view({ favIds: new Set([20]), player: { rowKey: 'm:1', i: 1 }, detailsKey: 'm:1' }));
+  const html = rowHtml({ key: 'm:1', m, lg: {} }, view({ favIds: new Set([20]), player: { rowKey: 'm:1', i: 1 } }));
   assert.match(html, /class="star on" data-fav="20"/);
   assert.match(html, /class="star" data-fav="10"/);
   assert.equal(html.match(/ active"/g).length, 1);
   assert.match(html, /data-play="1"/);
-  assert.match(html, /class="more on" data-details aria-expanded="true"/);
+  assert.doesNotMatch(html, /Подробнее/);
 });
 
 test('rowHtml экранирует названия из внешних источников', () => {

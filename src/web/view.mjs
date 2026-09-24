@@ -15,7 +15,7 @@ function streamLabels(streams) {
 }
 
 // Строка матча. view: { favIds — Set команд в избранном, hidden(m) — прятать ли счёт,
-// player — { rowKey, i } открытого плеера, detailsKey — строка с раскрытыми подробностями }
+// player — { rowKey, i } открытого плеера }
 export function rowHtml({ key, m, lg, showLeague }, view) {
   const live = isLive(m);
   // статус — как его отдаёт FotMob (FT, HT, AET, Pen…)
@@ -50,12 +50,10 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
   const bell = !m.started && !m.cancelled
     ? `<button type="button" class="bell${m.remind ? ' on' : ''}" data-remind aria-pressed="${!!m.remind}"
         title="${m.remind ? 'Не напоминать' : 'Напомнить за 15 минут и в начале матча'}">🔔</button>` : '';
-  const open = view.detailsKey === key;
   return `<div class="when${live ? ' live' : ''}">${when}${bell}</div>
     <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
     <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}
-      <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a>
-      <button type="button" class="more${open ? ' on' : ''}" data-details aria-expanded="${open}">Подробнее</button></div>
+      <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a></div>
     ${chips ? `<div class="streams">${chips}</div>` : ''}`;
 }
 

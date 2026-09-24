@@ -235,8 +235,6 @@ textarea.field { height: auto; padding: 8px 10px; width: 100%; resize: vertical;
 
 /* ---------- события и составы ---------- */
 .match .teams { cursor: pointer; }
-.more { border: 0; background: none; padding: 0; color: var(--faint); font-size: 12px; }
-.more:hover, .more.on { color: var(--vk); }
 .details { padding: 4px 14px 14px; border-top: 0 !important; }
 .dinner { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 10px 14px 12px; }
 .dinner h4 { margin: 6px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }

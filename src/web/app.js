@@ -212,7 +212,7 @@ function renderList() {
       return n;
     },
   })));
-  const view = { favIds: favoriteIds(), hidden: isHidden, player: state.player, detailsKey: state.details?.rowKey };
+  const view = { favIds: favoriteIds(), hidden: isHidden, player: state.player };
   // кнопка «События и составы» под плеером показывает, раскрыты ли они
   const pmore = playerEl?.querySelector('.pmore');
   if (pmore) {
@@ -474,7 +474,7 @@ $('#list').addEventListener('click', (e) => {
   }
   if (e.target.closest('.player .close')) { closePlayer(); return; }
   if (e.target.closest('.player .popout')) { popOut(); return; }
-  // «Подробнее» или клик по названиям команд — события и составы
+  // клик по названиям команд или кнопка под плеером — события и составы
   if (e.target.closest('[data-details], .match .teams')) {
     toggleDetails(e.target.closest('.player') ? state.player.rowKey : e.target.closest('[data-key]').dataset.key);
     return;
