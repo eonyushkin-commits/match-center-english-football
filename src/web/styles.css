@@ -66,6 +66,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .dates button:hover { border-color: var(--line-strong); }
 .dates button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .dates button.on small { color: inherit; opacity: .8; }
+.dates button.shift { flex: 0 0 36px; padding: 0; font-size: 20px; color: var(--muted); }
 
 .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .chip { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; }

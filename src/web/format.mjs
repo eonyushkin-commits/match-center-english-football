@@ -4,6 +4,18 @@ const pad = (n) => String(n).padStart(2, '0');
 export const ymd = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
 export const parseYmd = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
 export const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
+export const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
+
+// Полоса дат: восемь дней from..to от сегодня, сдвинутые на week недель. Если выбранный день
+// в неё не попадает (листали клавишами, клик по уведомлению), полоса сдвигается к нему.
+export function dateWindow(today, date, week, { from, to }) {
+  const off = daysBetween(today, date);
+  if (off < from + 7 * week || off > to + 7 * week) week = Math.floor((off - from) / 7);
+  const days = [];
+  for (let i = from + 7 * week; i <= to + 7 * week; i++) days.push({ date: addDays(today, i), offset: i });
+  return { week, days };
+}
+
 export const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 export const isLive = (m) => m.started && !m.finished && !m.cancelled;
 export const STATUS = { started: 'LIVE', upcoming: 'скоро', finished: 'запись', failed: 'сбой' };

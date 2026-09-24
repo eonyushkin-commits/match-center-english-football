@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
-import { addDays, audience, embedUrl, esc, parseAliases, parseChannel } from '../src/web/format.mjs';
+import { addDays, audience, dateWindow, embedUrl, esc, parseAliases, parseChannel } from '../src/web/format.mjs';
 import { detailsHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
 const stream = (o) => ({ status: 'started', channel: 'Sportcast', title: 'Челси — Арсенал', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', ...o });
@@ -22,6 +22,24 @@ test('esc экранирует всё, что ломает разметку', ()
 test('addDays переходит через месяц и год', () => {
   assert.equal(addDays('20261231', 1), '20270101');
   assert.equal(addDays('20260301', -1), '20260228');
+});
+
+test('dateWindow: восемь дней вокруг сегодня, ‹ › сдвигают на неделю', () => {
+  const DAYS = { from: -3, to: 4 };
+  const w = (date, week) => { const r = dateWindow('20260924', date, week, DAYS); return [r.week, r.days[0].date, r.days.at(-1).date]; };
+  assert.deepEqual(w('20260924', 0), [0, '20260921', '20260928']);
+  assert.deepEqual(w('20260917', -1), [-1, '20260914', '20260921']);
+  assert.deepEqual(w('20261001', 1), [1, '20260928', '20261005']);
+  assert.equal(dateWindow('20260924', '20260924', 0, DAYS).days[3].offset, 0, 'сегодня — четвёртый');
+});
+
+test('dateWindow: выбранный день за краем — полоса сдвигается к нему', () => {
+  const DAYS = { from: -3, to: 4 };
+  const w = (date, week) => { const r = dateWindow('20260924', date, week, DAYS); return [r.week, r.days[0].date]; };
+  assert.deepEqual(w('20260920', 0), [-1, '20260914'], '← с первого дня полосы');
+  assert.deepEqual(w('20260929', 0), [1, '20260928'], '→ с последнего');
+  assert.deepEqual(w('20260801', 0), [-8, '20260727'], 'уведомление о далёком матче');
+  assert.deepEqual(w('20260924', 3), [0, '20260921'], 'в полночь вернулись на сегодня');
 });
 
 test('audience: зрители только у идущего эфира', () => {

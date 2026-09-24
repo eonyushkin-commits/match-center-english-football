@@ -2,14 +2,14 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, embedUrl, esc, parseYmd, withTime, ymd } from './format.mjs';
+import { addDays, dateWindow, embedUrl, esc, parseYmd, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const DAYS = { from: -3, to: 4 }; // полоса дат: три дня назад — четыре вперёд
+const DAYS = { from: -3, to: 4 }; // полоса дат: три дня назад — четыре вперёд, ‹ › листают по неделе
 
 const state = {
   settings: null, // настройки с сервера: тема, фильтры, избранное живут там, а не в браузере
@@ -20,6 +20,7 @@ const state = {
   saveError: null,
   today: ymd(new Date()),
   date: ymd(new Date()),
+  week: 0, // на сколько недель сдвинута полоса дат
   q: '',
   player: null, // { rowKey, i, t } — t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
@@ -145,14 +146,16 @@ function render() {
 }
 
 function renderDates() {
-  const html = [];
-  for (let i = DAYS.from; i <= DAYS.to; i++) {
-    const d = addDays(state.today, i);
+  const { week, days } = dateWindow(state.today, state.date, state.week, DAYS);
+  state.week = week;
+  const html = ['<button type="button" class="shift" data-shift="-1" title="Неделя назад" aria-label="Неделя назад">‹</button>'];
+  for (const { date: d, offset: i } of days) {
     const dt = parseYmd(d);
     const label = i === 0 ? 'Сегодня' : i === -1 ? 'Вчера' : i === 1 ? 'Завтра' : dt.toLocaleDateString('ru-RU', { weekday: 'short' });
     const on = d === state.date;
     html.push(`<button type="button" data-date="${d}" class="${on ? 'on' : ''}" aria-pressed="${on}">${label}<small>${dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></button>`);
   }
+  html.push('<button type="button" class="shift" data-shift="1" title="Неделя вперёд" aria-label="Неделя вперёд">›</button>');
   $('#dates').innerHTML = html.join('');
   $('#dates .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -396,6 +399,12 @@ function setFilter(name, value) {
 $('#dates').addEventListener('click', (e) => {
   const b = e.target.closest('[data-date]');
   if (b) setDate(b.dataset.date);
+  // ‹ › — полоса и выбранный день на неделю назад или вперёд
+  const shift = Number(e.target.closest('[data-shift]')?.dataset.shift);
+  if (shift) {
+    state.week += shift;
+    setDate(addDays(state.date, 7 * shift));
+  }
 });
 for (const b of $$('[data-filter]')) b.addEventListener('click', () => {
   if (state.settings) setFilter(b.dataset.filter, !state.settings.ui.filters[b.dataset.filter]);
@@ -506,9 +515,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === ',') {
     openSettings();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-    const next = addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1);
-    const offset = Math.round((parseYmd(next) - parseYmd(state.today)) / 864e5);
-    if (offset >= DAYS.from && offset <= DAYS.to) setDate(next);
+    setDate(addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1)); // за краем полосы она сдвинется сама
   }
 });
 
