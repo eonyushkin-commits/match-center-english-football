@@ -30,6 +30,32 @@ export function embedUrl(s) {
   }
 }
 
+// ---------- переход по записи ----------
+// Начало минуты события: «34’» — 33:00 от начала тайма, «45+4’» — 48:00. Эфир канала отстаёт
+// от стадиона примерно на 40 с — этот запас и позволяет увидеть момент целиком.
+const HALVES = [['e2', 105], ['e1', 90], ['h2', 45], ['h1', 0]];
+export function eventMoment(kickoffs, min, plus = 0) {
+  const [half, base] = HALVES.find(([, b]) => min > b) || HALVES.at(-1);
+  const start = kickoffs?.[half];
+  return start ? start + Math.max(0, min - base - 1 + plus) * 60e3 : null;
+}
+
+// Минута матча в момент at — для подписи «эфир начался на 12-й минуте»
+export function matchMinute(kickoffs, at) {
+  const [half, base] = HALVES.find(([h]) => kickoffs?.[h] && kickoffs[h] <= at) || [];
+  return half ? base + Math.floor((at - kickoffs[half]) / 60e3) + 1 : null;
+}
+
+// Секунда записи, на которой момент at; null — это не запись или она его не застала
+export function recordSecond(s, at) {
+  if (s.status !== 'finished' || !s.time || at == null) return null;
+  const sec = Math.floor((at - s.time) / 1000);
+  return sec >= 0 && !(s.duration && sec >= s.duration) ? sec : null;
+}
+
+// ссылка VK с началом воспроизведения: …&t=20m14s — так понимают и плеер, и сайт
+export const withTime = (url, sec) => (sec == null ? url : `${url}${url.includes('?') ? '&' : '?'}t=${Math.floor(sec / 60)}m${sec % 60}s`);
+
 // «vkvideo.ru/@pl_forever», «https://vk.com/video/@x/lives», «@x» → screenName или null
 export function parseChannel(text) {
   const s = text.trim().replace(/^https?:\/\//i, '').replace(/^(www\.)?(vkvideo\.ru|vk\.com|vk\.ru)\//i, '')

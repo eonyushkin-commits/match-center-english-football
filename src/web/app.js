@@ -2,7 +2,7 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, embedUrl, esc, parseYmd, ymd } from './format.mjs';
+import { addDays, embedUrl, esc, parseYmd, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
@@ -21,7 +21,7 @@ const state = {
   today: ymd(new Date()),
   date: ymd(new Date()),
   q: '',
-  player: null, // { rowKey, i }
+  player: null, // { rowKey, i, t } — t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
@@ -214,7 +214,7 @@ function renderList() {
     for (const r of s.rows) {
       items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r, view) });
       if (state.player?.rowKey === r.key && playerEl) items.push({ key: 'player', node: playerEl });
-      if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m)) });
+      if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m), state.player?.rowKey === r.key ? state.player.i : null) });
     }
     reconcile(node.lastElementChild, items);
   }
@@ -267,31 +267,34 @@ function findMatch(id) {
   return null;
 }
 
-function openPlayer(rowKey, i) {
+// t — с какой секунды открыть запись (начало матча, гол); без него — как обычно
+function openPlayer(rowKey, i, t = null) {
   const m = findMatch(Number(rowKey.split(':')[1]));
   const s = m?.streams[i];
-  const src = s && embedUrl(s);
-  if (!src) return false;
+  const embed = s && embedUrl(s);
+  if (!embed) return false;
+  const src = withTime(embed, t);
 
-  // тот же матч — переключаем канал без анимации
+  // тот же матч — переключаем канал или момент без анимации; повторный клик по эфиру закрывает плеер
   if (playerEl && state.player?.rowKey === rowKey) {
-    if (state.player.i === i) closePlayer();
+    if (state.player.i === i && t == null) closePlayer();
     else {
-      state.player = { rowKey, i };
+      state.player = { rowKey, i, t };
       playerEl.querySelector('iframe').src = src;
-      playerEl.querySelector('.ext').href = s.url;
+      playerEl.querySelector('.ext').href = withTime(s.url, t);
       render();
+      if (t != null) centerPlayer(playerEl); // ▶ у гола ниже по списку — плеер мог уйти за экран
     }
     return true;
   }
   if (playerEl) playerEl.remove();
 
-  state.player = { rowKey, i };
+  state.player = { rowKey, i, t };
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
     <div class="phead"><b>${esc(m.home.name)} — ${esc(m.away.name)}</b>
-      <a class="ext" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть в VK ↗</a>
+      <a class="ext" href="${esc(withTime(s.url, t))}" target="_blank" rel="noopener">Открыть в VK ↗</a>
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></iframe></div>
@@ -332,9 +335,10 @@ function centerPlayer(el) {
 function popOut() {
   const m = findMatch(Number(state.player?.rowKey.split(':')[1]));
   const s = m?.streams[state.player.i];
-  const src = s && embedUrl(s);
-  if (!src) return;
-  const q = new URLSearchParams({ src, url: s.url, title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
+  const embed = s && embedUrl(s);
+  if (!embed) return;
+  const src = withTime(embed, state.player.t);
+  const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   closePlayer(); // в двух местах сразу один эфир не нужен
 }
@@ -422,6 +426,13 @@ $('#list').addEventListener('click', (e) => {
   if (e.target.closest('[data-remind]')) {
     const m = findMatch(Number(e.target.closest('[data-key]').dataset.key.split(':')[1]));
     if (m) toggleRemind(m);
+    return;
+  }
+  // «С начала матча» и ▶ у гола: запись этого матча с нужной секунды
+  const seek = e.target.closest('[data-seek]');
+  if (seek && state.details) {
+    const [i, t] = seek.dataset.seek.split(':').map(Number);
+    openPlayer(state.details.rowKey, i, t);
     return;
   }
   const reveal = e.target.closest('[data-reveal]');

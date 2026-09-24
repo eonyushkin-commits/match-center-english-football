@@ -26,6 +26,7 @@ export function toItems(videos, ch) {
         time: t ? t * 1000 : null,
         created: v.date ? v.date * 1000 : null, // когда канал создал видео — по нему упорядочены записи
         spectators: Number.isFinite(v.spectators) ? v.spectators : null, // смотрят прямо сейчас — только у эфиров
+        duration: v.duration > 0 ? v.duration : null, // длина записи, с
       };
     })
     .map(withChannel(ch))
