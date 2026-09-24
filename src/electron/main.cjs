@@ -282,7 +282,10 @@ function buildMenu() {
 if (!app.requestSingleInstanceLock()) {
   app.quit(); // приложение уже открыто — второе окно не нужно, первое покажется само
 } else {
-  app.setAppUserModelId(APP_ID); // без этого Windows не показывает уведомления с названием приложения
+  // Без этого Windows не показывает уведомления с названием приложения. У запуска из исходников —
+  // свой идентификатор: иначе Windows связывает кнопку установленного приложения на панели задач
+  // с ярлыком «Electron», который создаётся для уведомлений, и показывает значок Electron.
+  app.setAppUserModelId(app.isPackaged ? APP_ID : `${APP_ID}.dev`);
   app.on('second-instance', showWindow);
   app.on('window-all-closed', () => {}); // выходим только по «Выход»: главное окно прячется в трей
   app.on('before-quit', () => {
