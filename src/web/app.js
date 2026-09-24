@@ -2,14 +2,13 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, dateWindow, embedUrl, esc, parseYmd, withTime, ymd } from './format.mjs';
+import { addDays, embedUrl, esc, parseYmd, weekOf, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const DAYS = { from: -3, to: 4 }; // полоса дат: три дня назад — четыре вперёд, ‹ › листают по неделе
 
 const state = {
   settings: null, // настройки с сервера: тема, фильтры, избранное живут там, а не в браузере
@@ -20,7 +19,6 @@ const state = {
   saveError: null,
   today: ymd(new Date()),
   date: ymd(new Date()),
-  week: 0, // на сколько недель сдвинута полоса дат
   q: '',
   player: null, // { rowKey, i, t } — t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
@@ -145,17 +143,17 @@ function render() {
   renderList();
 }
 
+// Полоса дат — неделя выбранного дня; ‹ — воскресенье прошлой недели, › — понедельник следующей
 function renderDates() {
-  const { week, days } = dateWindow(state.today, state.date, state.week, DAYS);
-  state.week = week;
-  const html = ['<button type="button" class="shift" data-shift="-1" title="Неделя назад" aria-label="Неделя назад">‹</button>'];
+  const days = weekOf(state.today, state.date);
+  const html = [`<button type="button" class="shift" data-date="${addDays(days[0].date, -1)}" title="Прошлая неделя" aria-label="Прошлая неделя">‹</button>`];
   for (const { date: d, offset: i } of days) {
     const dt = parseYmd(d);
     const label = i === 0 ? 'Сегодня' : i === -1 ? 'Вчера' : i === 1 ? 'Завтра' : dt.toLocaleDateString('ru-RU', { weekday: 'short' });
     const on = d === state.date;
     html.push(`<button type="button" data-date="${d}" class="${on ? 'on' : ''}" aria-pressed="${on}">${label}<small>${dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></button>`);
   }
-  html.push('<button type="button" class="shift" data-shift="1" title="Неделя вперёд" aria-label="Неделя вперёд">›</button>');
+  html.push(`<button type="button" class="shift" data-date="${addDays(days.at(-1).date, 1)}" title="Следующая неделя" aria-label="Следующая неделя">›</button>`);
   $('#dates').innerHTML = html.join('');
   $('#dates .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -209,6 +207,13 @@ function renderList() {
     },
   })));
   const view = { favIds: favoriteIds(), hidden: isHidden, player: state.player, detailsKey: state.details?.rowKey };
+  // кнопка «События и составы» под плеером показывает, раскрыты ли они
+  const pmore = playerEl?.querySelector('.pmore');
+  if (pmore) {
+    const open = !!state.player && state.details?.rowKey === state.player.rowKey;
+    pmore.classList.toggle('on', open);
+    pmore.setAttribute('aria-expanded', String(open));
+  }
   const nodes = new Map([...list.children].map((n) => [n.dataset.key, n]));
   for (const s of secs) {
     const node = nodes.get(s.key);
@@ -305,10 +310,13 @@ function openPlayer(rowKey, i, t = null) {
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture"></iframe></div>
+    <button type="button" class="pmore" data-details aria-expanded="false">События и составы</button>
   </div></div>`;
   el.addEventListener('transitionend', (e) => {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
   });
+  // события и составы сразу под трансляцией; в режиме без спойлеров — только по кнопке под плеером
+  if (!state.settings?.ui.hideScores && state.details?.rowKey !== rowKey) toggleDetails(rowKey);
   render();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
   return true;
@@ -403,12 +411,6 @@ function setFilter(name, value) {
 $('#dates').addEventListener('click', (e) => {
   const b = e.target.closest('[data-date]');
   if (b) setDate(b.dataset.date);
-  // ‹ › — полоса и выбранный день на неделю назад или вперёд
-  const shift = Number(e.target.closest('[data-shift]')?.dataset.shift);
-  if (shift) {
-    state.week += shift;
-    setDate(addDays(state.date, 7 * shift));
-  }
 });
 for (const b of $$('[data-filter]')) b.addEventListener('click', () => {
   if (state.settings) setFilter(b.dataset.filter, !state.settings.ui.filters[b.dataset.filter]);
@@ -458,7 +460,7 @@ $('#list').addEventListener('click', (e) => {
   if (e.target.closest('.player .popout')) { popOut(); return; }
   // «Подробнее» или клик по названиям команд — события и составы
   if (e.target.closest('[data-details], .match .teams')) {
-    toggleDetails(e.target.closest('[data-key]').dataset.key);
+    toggleDetails(e.target.closest('.player') ? state.player.rowKey : e.target.closest('[data-key]').dataset.key);
     return;
   }
   const a = e.target.closest('[data-play]');
@@ -519,7 +521,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === ',') {
     openSettings();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-    setDate(addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1)); // за краем полосы она сдвинется сама
+    setDate(addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1)); // за краем недели полоса перейдёт на соседнюю
   }
 });
 

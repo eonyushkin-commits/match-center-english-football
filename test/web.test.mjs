@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
-import { addDays, audience, dateWindow, embedUrl, esc, parseAliases, parseChannel } from '../src/web/format.mjs';
+import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, weekOf } from '../src/web/format.mjs';
 import { detailsHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
 const stream = (o) => ({ status: 'started', channel: 'Sportcast', title: 'Челси — Арсенал', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', ...o });
@@ -24,22 +24,14 @@ test('addDays переходит через месяц и год', () => {
   assert.equal(addDays('20260301', -1), '20260228');
 });
 
-test('dateWindow: восемь дней вокруг сегодня, ‹ › сдвигают на неделю', () => {
-  const DAYS = { from: -3, to: 4 };
-  const w = (date, week) => { const r = dateWindow('20260924', date, week, DAYS); return [r.week, r.days[0].date, r.days.at(-1).date]; };
-  assert.deepEqual(w('20260924', 0), [0, '20260921', '20260928']);
-  assert.deepEqual(w('20260917', -1), [-1, '20260914', '20260921']);
-  assert.deepEqual(w('20261001', 1), [1, '20260928', '20261005']);
-  assert.equal(dateWindow('20260924', '20260924', 0, DAYS).days[3].offset, 0, 'сегодня — четвёртый');
-});
-
-test('dateWindow: выбранный день за краем — полоса сдвигается к нему', () => {
-  const DAYS = { from: -3, to: 4 };
-  const w = (date, week) => { const r = dateWindow('20260924', date, week, DAYS); return [r.week, r.days[0].date]; };
-  assert.deepEqual(w('20260920', 0), [-1, '20260914'], '← с первого дня полосы');
-  assert.deepEqual(w('20260929', 0), [1, '20260928'], '→ с последнего');
-  assert.deepEqual(w('20260801', 0), [-8, '20260727'], 'уведомление о далёком матче');
-  assert.deepEqual(w('20260924', 3), [0, '20260921'], 'в полночь вернулись на сегодня');
+test('weekOf: полоса — календарная неделя выбранного дня, пн–вс', () => {
+  const week = (date) => weekOf('20260924', date).map((d) => d.date.slice(4));
+  assert.deepEqual(week('20260924'), ['0921', '0922', '0923', '0924', '0925', '0926', '0927'], 'чт — неделя с пн 21');
+  assert.deepEqual(week('20260921'), week('20260927'), 'пн и вс одной недели');
+  assert.deepEqual(week('20260920'), ['0914', '0915', '0916', '0917', '0918', '0919', '0920'], '‹ — воскресенье прошлой недели');
+  assert.deepEqual(week('20260928').slice(0, 1), ['0928'], '› — понедельник следующей');
+  assert.deepEqual(week('20261231'), ['1228', '1229', '1230', '1231', '0101', '0102', '0103'], 'через Новый год');
+  assert.deepEqual(weekOf('20260924', '20260924').map((d) => d.offset), [-3, -2, -1, 0, 1, 2, 3]);
 });
 
 test('audience: зрители только у идущего эфира', () => {

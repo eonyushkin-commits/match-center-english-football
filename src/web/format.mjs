@@ -6,14 +6,13 @@ export const parseYmd = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.s
 export const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
 export const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
 
-// Полоса дат: восемь дней from..to от сегодня, сдвинутые на week недель. Если выбранный день
-// в неё не попадает (листали клавишами, клик по уведомлению), полоса сдвигается к нему.
-export function dateWindow(today, date, week, { from, to }) {
-  const off = daysBetween(today, date);
-  if (off < from + 7 * week || off > to + 7 * week) week = Math.floor((off - from) / 7);
-  const days = [];
-  for (let i = from + 7 * week; i <= to + 7 * week; i++) days.push({ date: addDays(today, i), offset: i });
-  return { week, days };
+// Полоса дат — календарная неделя (пн–вс) выбранного дня; offset — сколько дней от сегодня
+export function weekOf(today, date) {
+  const monday = addDays(date, -((parseYmd(date).getDay() + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = addDays(monday, i);
+    return { date: d, offset: daysBetween(today, d) };
+  });
 }
 
 export const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
