@@ -161,7 +161,7 @@ export function applyPatch(user, patch) {
 
 // Перенос config.json первой версии: забираем только то, что пользователь действительно менял.
 // Каналов, добавленных в новых версиях, в старой копии нет — это не значит, что их выключили.
-export async function migrateV1(file) {
+async function migrateV1(file) {
   let old;
   try {
     old = JSON.parse(await readFile(file, 'utf8'));

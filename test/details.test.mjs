@@ -74,3 +74,11 @@ test('завершённый матч — без задержки и без ли
   await get('5795461');
   assert.equal(calls, 1, 'повторно FotMob не спрашиваем');
 });
+
+test('parseEvents: добавленное время — «45+4», без повтора', () => {
+  const ev = parseEvents({ content: { matchFacts: { events: { events: [
+    { type: 'Goal', time: 45, timeStr: '45 + 4', overloadTime: 4, overloadTimeStr: '+4', isHome: true, newScore: [0, 1], player: { name: 'A' } },
+    { type: 'Card', time: 19, timeStr: 19, isHome: false, card: 'Yellow', player: { name: 'B' } },
+  ] } } } });
+  assert.deepEqual(ev.map((e) => e.minute), ['45+4', '19']);
+});

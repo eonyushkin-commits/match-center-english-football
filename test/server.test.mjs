@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -79,4 +79,17 @@ test('страница отдаётся с CSP, лишние пути — 404', 
   assert.match(page.headers.get('content-security-policy'), /frame-src https:\/\/vkvideo\.ru/);
   assert.equal((await fetch(`${base}/../package.json`)).status, 404);
   assert.equal((await fetch(`${base}/src/core/settings.mjs`)).status, 404);
+});
+
+test('отдаются все модули, которые импортирует страница', async () => {
+  const web = new URL('../src/web/', import.meta.url);
+  const files = (await readdir(web)).filter((f) => /\.m?js$/.test(f));
+  const wanted = new Set(['app.js']);
+  for (const f of files)
+    for (const [, dep] of (await readFile(new URL(f, web), 'utf8')).matchAll(/from '\.\/([\w-]+\.mjs)'/g)) wanted.add(dep);
+  for (const f of wanted) {
+    const r = await fetch(`${base}/${f}`);
+    assert.equal(r.status, 200, f);
+    assert.match(r.headers.get('content-type'), /^text\/javascript/, f);
+  }
 });

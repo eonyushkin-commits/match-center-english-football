@@ -21,7 +21,8 @@
   },
   "devDependencies": {
     "electron": "^44.4.3",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "linkedom": "^0.18.13"
   },
   "build": {
     "appId": "ru.sportcenter.matchcenter",

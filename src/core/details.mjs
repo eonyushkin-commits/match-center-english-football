@@ -7,7 +7,8 @@ const LIVE_FETCH_MS = 20e3; // как часто спрашивать FotMob п�
 const DONE_TTL_MS = 10 * 60e3; // завершённый или не начавшийся матч меняется редко
 const MAX_MATCHES = 30;
 
-const minute = (e) => `${e.timeStr ?? e.time}${e.overloadTimeStr ? `+${String(e.overloadTimeStr).replace(/^\+/, '')}` : ''}`;
+// «45+4»: timeStr у FotMob уже содержит добавленное время («45 + 4»), поэтому собираем из чисел
+const minute = (e) => (e.time != null ? `${e.time}${e.overloadTime ? `+${e.overloadTime}` : ''}` : String(e.timeStr ?? ''));
 const side = (e) => (e.isHome ? 'home' : 'away');
 const assist = (s) => (s ? String(s).replace(/^assist by\s+/i, '') : null);
 
