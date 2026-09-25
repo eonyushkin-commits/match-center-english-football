@@ -154,6 +154,7 @@ test('rowHtml: избранное и активный эфир, без кноп�
   assert.equal(html.match(/ active"/g).length, 1);
   assert.match(html, /data-play="1"/);
   assert.doesNotMatch(html, /Подробнее/);
+  assert.doesNotMatch(html, /fotmob\.com\/match/, 'ссылка на FotMob — в подробностях');
 });
 
 test('rowHtml экранирует названия из внешних источников', () => {
@@ -177,6 +178,11 @@ test('detailsHtml: задержка, загрузка, ошибка, матч н
   assert.match(detailsHtml(match(), { data: null }, false), /Загрузка/);
   assert.match(detailsHtml(match(), { error: 'HTTP 500' }, false), /Не удалось загрузить: HTTP 500/);
   assert.match(detailsHtml(match(), { data: { state: 'upcoming', events: [] } }, false), /ещё не начался.*Составы появятся/s);
+});
+
+test('detailsHtml: ссылка на FotMob в углу напротив «События»', () => {
+  assert.match(detailsHtml(match(), { data: { state: 'finished', events: [], lineups: null } }, false),
+    /<div class="dhead"><h4>События<\/h4><a class="fm" href="https:\/\/www\.fotmob\.com\/match\/1"/);
 });
 
 test('detailsHtml: «Запасные» открыты у обеих команд сразу', () => {

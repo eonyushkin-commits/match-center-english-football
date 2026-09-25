@@ -52,8 +52,7 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
         title="${m.remind ? 'Не напоминать' : 'Напомнить за 15 минут и в начале матча'}">🔔</button>` : '';
   return `<div class="when${live ? ' live' : ''}">${when}${bell}</div>
     <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
-    <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}
-      <a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть в FotMob">FotMob ↗</a></div>
+    <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}</div>
     ${chips ? `<div class="streams">${chips}</div>` : ''}`;
 }
 
@@ -115,7 +114,8 @@ export function detailsHtml(m, d, hidden, playing = null) {
   else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
   else events = `<ol class="timeline">${x.events.map((e) => eventHtml(e, e.kind === 'goal' ? goalSeek(m, x.kickoffs, e, playing) : null)).join('')}</ol>${x.delayed ? '<div class="dnote small">С задержкой в минуту, чтобы не обгонять трансляцию.</div>' : ''}`;
   const lineups = x.lineups ? lineupsHtml(x.lineups, m, d.subsOpen) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
-  return `<div class="dinner"><h4>События</h4>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
+  const fotmob = `<a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть матч в FotMob">FotMob ↗</a>`;
+  return `<div class="dinner"><div class="dhead"><h4>События</h4>${fotmob}</div>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
 }
 
 // ---------- обновление приложения: «Скачать» → «Установить» ----------

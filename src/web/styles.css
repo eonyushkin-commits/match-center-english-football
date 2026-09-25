@@ -235,7 +235,8 @@ textarea.field { height: auto; padding: 8px 10px; width: 100%; resize: vertical;
 .details { padding: 4px 14px 14px; border-top: 0 !important; }
 .dinner { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); padding: 10px 14px 12px; }
 .dinner h4 { margin: 6px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.dinner h4 + * { margin-top: 0; }
+.dinner h4 + *, .dhead + * { margin-top: 0; }
+.dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .dnote { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dnote.small { font-size: 11px; color: var(--faint); margin-top: 6px; }
 .timeline { list-style: none; margin: 0; padding: 0; }
