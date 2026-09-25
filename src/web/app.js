@@ -2,7 +2,7 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, dateStrip, embedUrl, esc, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
+import { addDays, dateStrip, embedUrl, esc, inDateRange, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
@@ -19,7 +19,7 @@ const state = {
   saveError: null,
   today: ymd(new Date()),
   date: ymd(new Date()),
-  stripStart: null, // первый день полосы дат; null — выбранный день в середине
+  stripStart: null, // первый день полосы дат; null — сегодня в середине
   q: '',
   player: null, // { rowKey, i, t, autoplay } — t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
@@ -144,22 +144,19 @@ function render() {
   renderList();
 }
 
-// Полоса дат: ‹ › — на день назад и вперёд, календарь справа — любая дата
+// Полоса дат: ‹ › — на день назад и вперёд, в пределах сегодня ±10 дней
 function renderDates() {
   const { start, days } = dateStrip(state.today, state.date, state.stripStart);
   state.stripStart = start;
-  const html = [`<button type="button" class="shift" data-date="${addDays(state.date, -1)}" title="Предыдущий день (←)" aria-label="Предыдущий день">‹</button>`];
+  const arrow = (d, sign, label) => `<button type="button" class="shift" data-date="${d}" title="${label}" aria-label="${label}"${inDateRange(state.today, d) ? '' : ' disabled'}>${sign}</button>`;
+  const html = [arrow(addDays(state.date, -1), '‹', 'Предыдущий день (←)')];
   for (const { date: d, offset: i } of days) {
     const dt = parseYmd(d);
     const label = i === 0 ? 'Сегодня' : i === -1 ? 'Вчера' : i === 1 ? 'Завтра' : dt.toLocaleDateString('ru-RU', { weekday: 'short' });
     const on = d === state.date;
     html.push(`<button type="button" data-date="${d}" class="${on ? 'on' : ''}" aria-pressed="${on}">${label}<small>${dt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small></button>`);
   }
-  html.push(`<button type="button" class="shift" data-date="${addDays(state.date, 1)}" title="Следующий день (→)" aria-label="Следующий день">›</button>`);
-  const iso = `${state.date.slice(0, 4)}-${state.date.slice(4, 6)}-${state.date.slice(6)}`;
-  html.push(`<span class="cal"><button type="button" class="shift" data-action="pick-date" title="Выбрать дату" aria-label="Выбрать дату">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></button>
-    <input type="date" class="pick" value="${iso}" tabindex="-1" aria-hidden="true"></span>`);
+  html.push(arrow(addDays(state.date, 1), '›', 'Следующий день (→)'));
   $('#dates').innerHTML = html.join('');
   $('#dates .on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
@@ -431,16 +428,6 @@ function setFilter(name, value) {
 $('#dates').addEventListener('click', (e) => {
   const b = e.target.closest('[data-date]');
   if (b) setDate(b.dataset.date);
-  if (e.target.closest('[data-action="pick-date"]')) {
-    const input = $('#dates .pick');
-    try { input.showPicker(); } catch { input.focus(); }
-  }
-});
-// дата из календаря — полоса заново выстраивается вокруг неё
-$('#dates').addEventListener('change', (e) => {
-  if (!e.target.matches('.pick') || !e.target.value) return;
-  state.stripStart = null;
-  setDate(e.target.value.replaceAll('-', ''));
 });
 for (const b of $$('[data-filter]')) b.addEventListener('click', () => {
   if (state.settings) setFilter(b.dataset.filter, !state.settings.ui.filters[b.dataset.filter]);
@@ -561,7 +548,8 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === ',') {
     openSettings();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-    setDate(addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1)); // за краем полосы она сдвинется на день
+    const next = addDays(state.date, e.key === 'ArrowLeft' ? -1 : 1);
+    if (inDateRange(state.today, next)) setDate(next); // за краем полосы она сдвинется на день
   }
 });
 

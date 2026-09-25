@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
-import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, dateStrip } from '../src/web/format.mjs';
+import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, dateStrip, inDateRange } from '../src/web/format.mjs';
 import { detailsHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
 const stream = (o) => ({ status: 'started', channel: 'Sportcast', title: 'Челси — Арсенал', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', ...o });
@@ -24,14 +24,20 @@ test('addDays переходит через месяц и год', () => {
   assert.equal(addDays('20260301', -1), '20260228');
 });
 
-test('dateStrip: семь дней, сегодня в середине, сдвиг — только за краем', () => {
-  const strip = (date, start) => { const r = dateStrip('20260924', date, start); return [r.start.slice(4), r.days.map((d) => d.date.slice(6)).join(' ')]; };
-  assert.deepEqual(strip('20260924', null), ['0921', '21 22 23 24 25 26 27'], 'запуск: сегодня в середине');
-  assert.deepEqual(strip('20260926', '20260921'), ['0921', '21 22 23 24 25 26 27'], 'клик внутри — полоса на месте');
-  assert.deepEqual(strip('20260928', '20260921'), ['0922', '22 23 24 25 26 27 28'], '› с края — сдвиг на день');
-  assert.deepEqual(strip('20260920', '20260921'), ['0920', '20 21 22 23 24 25 26'], '‹ с края — сдвиг на день');
-  assert.deepEqual(strip('20261231', null).slice(1), ['28 29 30 31 01 02 03'], 'календарь: дата в середине, через Новый год');
-  assert.deepEqual(dateStrip('20260924', '20260924', null).days.map((d) => d.offset), [-3, -2, -1, 0, 1, 2, 3]);
+test('dateStrip: семь дней, сегодня в середине, сдвиг на день — только за краем', () => {
+  const strip = (date, start) => { const r = dateStrip('20260925', date, start); return [r.start.slice(4), r.days.map((d) => d.date.slice(6)).join(' ')]; };
+  assert.deepEqual(strip('20260925', null), ['0922', '22 23 24 25 26 27 28'], 'запуск: сегодня в середине');
+  assert.deepEqual(strip('20260927', '20260922'), ['0922', '22 23 24 25 26 27 28'], 'клик внутри — полоса на месте');
+  assert.deepEqual(strip('20260929', '20260922'), ['0923', '23 24 25 26 27 28 29'], '› с края — сдвиг на день');
+  assert.deepEqual(strip('20260921', '20260922'), ['0921', '21 22 23 24 25 26 27'], '‹ с края — сдвиг на день');
+  assert.deepEqual(dateStrip('20260925', '20260925', null).days.map((d) => d.offset), [-3, -2, -1, 0, 1, 2, 3]);
+});
+
+test('inDateRange: неделя за краями полосы — с 15 сентября по 5 октября', () => {
+  assert.equal(inDateRange('20260925', '20260915'), true);
+  assert.equal(inDateRange('20260925', '20260914'), false);
+  assert.equal(inDateRange('20260925', '20261005'), true);
+  assert.equal(inDateRange('20260925', '20261006'), false);
 });
 
 test('audience: зрители только у идущего эфира', () => {

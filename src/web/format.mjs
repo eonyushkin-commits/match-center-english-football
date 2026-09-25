@@ -6,9 +6,9 @@ export const parseYmd = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.s
 export const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
 export const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
 
-// Полоса дат: size дней подряд с первого start. Сдвигается, только когда выбранный день уходит
-// за край, — клик по видимому дню её не двигает. Без start (запуск, переход из календаря)
-// выбранный день в середине. offset — сколько дней от сегодня.
+// Полоса дат: size дней подряд с первого start. Сдвигается на день, только когда выбранный день
+// уходит за край, — клик по видимому дню её не двигает. Без start (запуск) выбранный день в
+// середине. offset — сколько дней от сегодня.
 export function dateStrip(today, date, start, size = 7) {
   if (!start) start = addDays(date, -Math.floor(size / 2));
   else if (daysBetween(start, date) < 0) start = date;
@@ -19,6 +19,10 @@ export function dateStrip(today, date, start, size = 7) {
   });
   return { start, days };
 }
+
+// Куда можно листать: полоса при запуске (сегодня ±3) и ещё неделя в каждую сторону
+export const DATE_LIMIT = 10;
+export const inDateRange = (today, date) => Math.abs(daysBetween(today, date)) <= DATE_LIMIT;
 
 export const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 export const isLive = (m) => m.started && !m.finished && !m.cancelled;
