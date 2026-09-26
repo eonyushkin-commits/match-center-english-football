@@ -112,7 +112,7 @@ export function createDetails({ fotmob, now = () => Date.now() }) {
     if (latest.state !== 'live') return { ...latest, delayed: false };
     // идущий матч: самый свежий снимок, которому уже есть минута
     const ripe = entry.snapshots.filter((s) => now() - s.t >= DELAY_MS).at(-1);
-    if (!ripe) return { state: 'live', pending: true, delayed: true, readyIn: Math.ceil((DELAY_MS - (now() - entry.snapshots[0].t)) / 1000), lineups: latest.lineups, events: [] };
+    if (!ripe) return { state: 'live', pending: true, delayed: true, readyIn: Math.ceil((DELAY_MS - (now() - entry.snapshots[0].t)) / 1000), lineups: latest.lineups, events: [], kickoffs: latest.kickoffs };
     return { ...ripe.data, state: 'live', delayed: true, lineups: latest.lineups };
   };
 }

@@ -73,10 +73,9 @@ export function createNamer(ru, aliases = {}) {
 const best = (names, s) => Math.max(0, ...names.map((n) => nameScore(n, s)));
 const RANK = { started: 0, upcoming: 1, finished: 2, failed: 3 };
 const DAY = 24 * 3600e3;
-// Внутри статуса: идущие — по зрителям (популярный первым), записи — по дате создания видео,
-// запланированные — по времени начала
+// Внутри статуса: записи — по дате создания видео, идущие и запланированные — по времени начала
+// (не по зрителям: иначе кнопки меняются местами при каждом обновлении)
 function withinStatus(x, y) {
-  if (x.status === 'started') return (y.spectators ?? -1) - (x.spectators ?? -1) || (x.time ?? 0) - (y.time ?? 0);
   if (x.status === 'finished') return (x.created ?? x.time ?? 0) - (y.created ?? y.time ?? 0);
   return (x.time ?? 0) - (y.time ?? 0);
 }

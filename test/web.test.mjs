@@ -147,12 +147,12 @@ test('rowHtml: «Искать в VK» только у не сыгранного 
 });
 
 test('rowHtml: избранное и активный эфир, без кнопки «Подробнее»', () => {
-  const m = match({ streams: [stream(), stream()] });
-  const html = rowHtml({ key: 'm:1', m, lg: {} }, view({ favIds: new Set([20]), player: { rowKey: 'm:1', i: 1 } }));
+  const m = match({ streams: [stream(), stream({ url: 'https://vkvideo.ru/video-1_3' })] });
+  const html = rowHtml({ key: 'm:1', m, lg: {} }, view({ favIds: new Set([20]), player: { rowKey: 'm:1', url: 'https://vkvideo.ru/video-1_3' } }));
   assert.match(html, /class="star on" data-fav="20"/);
   assert.match(html, /class="star" data-fav="10"/);
   assert.equal(html.match(/ active"/g).length, 1);
-  assert.match(html, /data-play="1"/);
+  assert.match(html, / active"[^>]*data-play="1"/, 'подсвечен эфир с этой ссылкой, где бы он ни стоял');
   assert.doesNotMatch(html, /Подробнее/);
   assert.doesNotMatch(html, /fotmob\.com\/match/, 'ссылка на FotMob — в подробностях');
 });

@@ -10,7 +10,7 @@ import { detailsHtml } from '../src/web/view.mjs';
 const iso = (ms) => new Date(ms).toISOString();
 const halfs = { firstHalfStarted: '19.09.2026 13:31:12', secondHalfStarted: '19.09.2026 14:39:37', firstExtraHalfStarted: '', secondExtraHalfStarted: '' };
 const k = parseKickoffs({ header: { status: { utcTime: '2026-09-19T11:30:00.000Z', halfs } } });
-const rec = (o) => ({ status: 'finished', channel: 'Английский Акцент', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', time: Date.parse('2026-09-19T11:10:58Z'), duration: 8748, ...o });
+const rec = (o) => ({ status: 'finished', channel: 'Английский Акцент', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', time: Date.parse('2026-09-19T11:10:58Z'), duration: 8748, ...o });
 
 test('fotmobTime: центральноевропейское время, летом UTC+2, зимой UTC+1', () => {
   assert.equal(iso(fotmobTime('19.09.2026 13:31:12')), '2026-09-19T11:31:12.000Z');
@@ -60,10 +60,10 @@ const match = (streams) => ({ id: 1, home: { name: 'Тоттенхэм' }, away:
 const details = (o = {}) => ({ data: { state: 'finished', events: [goal], lineups: null, kickoffs: k, ...o } });
 
 test('detailsHtml: ▶ у гола — в открытой записи, если момент в ней есть', () => {
-  const m = match([rec(), rec({ channel: 'ВЫШЛИ!', time: Date.parse('2026-09-19T11:25:02Z') })]);
+  const m = match([rec(), rec({ channel: 'ВЫШЛИ!', url: 'https://vkvideo.ru/video-2_2', time: Date.parse('2026-09-19T11:25:02Z') })]);
   // 45+4 → 48:40 от свистка: 1214 + 2920 у первой записи, 370 + 2920 у второй
   assert.match(detailsHtml(m, details(), false), /class="seek" data-seek="0:4134"/);
-  assert.match(detailsHtml(m, details(), false, 1), /class="seek" data-seek="1:3290"/);
+  assert.match(detailsHtml(m, details(), false, 'https://vkvideo.ru/video-2_2'), /class="seek" data-seek="1:3290"/);
   assert.doesNotMatch(detailsHtml(m, details({ kickoffs: null }), false), /data-seek/, 'без времени таймов — без переходов');
 });
 

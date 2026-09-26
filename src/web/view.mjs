@@ -15,7 +15,7 @@ function streamLabels(streams) {
 }
 
 // Строка матча. view: { favIds — Set команд в избранном, hidden(m) — прятать ли счёт,
-// player — { rowKey, i } открытого плеера }
+// player — { rowKey, url } открытого плеера }
 export function rowHtml({ key, m, lg, showLeague }, view) {
   const live = isLive(m);
   // статус — как его отдаёт FotMob (FT, HT, AET, Pen…)
@@ -39,7 +39,7 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
   const p = view.player;
   let chips = m.streams.map((s, i) => {
     const aud = audience(s);
-    return `<a class="stream ${s.status}${p?.rowKey === key && p.i === i ? ' active' : ''}"
+    return `<a class="stream ${s.status}${p?.rowKey === key && p.url === s.url ? ' active' : ''}"
       href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(aud ? `${s.title}\n${aud.title}` : s.title)}" data-play="${i}">
       <span class="tag">${STATUS[s.status] || ''}</span>${esc(labels[i])}${aud ? `<span class="aud">${esc(aud.text)}</span>` : ''}</a>`;
   }).join('');
@@ -94,7 +94,8 @@ function lineupsHtml(l, m, subsOpen) {
 function goalSeek(m, k, e, playing) {
   const at = eventMoment(k, e.min, e.plus);
   if (at == null) return null;
-  const order = playing == null ? m.streams.keys() : [playing, ...m.streams.keys()];
+  const open = m.streams.findIndex((s) => s.url === playing);
+  const order = open < 0 ? m.streams.keys() : [open, ...m.streams.keys()];
   for (const i of order) {
     const sec = m.streams[i] && m.streams[i].embed ? recordSecond(m.streams[i], at) : null;
     if (sec != null) return `${i}:${sec}`;
@@ -103,7 +104,7 @@ function goalSeek(m, k, e, playing) {
 }
 
 // d — раскрытые подробности { data, error, subsOpen }; hidden — счёт скрыт режимом без спойлеров;
-// playing — номер эфира этого матча, открытого в плеере
+// playing — ссылка эфира этого матча, открытого в плеере
 export function detailsHtml(m, d, hidden, playing = null) {
   if (d.error) return `<div class="dnote">Не удалось загрузить: ${esc(d.error)}</div>`;
   if (!d.data) return '<div class="dnote">Загрузка…</div>';

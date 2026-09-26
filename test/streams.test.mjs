@@ -83,7 +83,7 @@ test('toItems: зрители эфира и дата создания видео
   assert.equal('views' in record, false, 'просмотры записей не нужны');
 });
 
-test('matchStreams: эфиры впереди и по зрителям, записи — по дате создания', () => {
+test('matchStreams: эфиры впереди и по времени начала, записи — по дате создания', () => {
   const m = { home: { id: 1 }, away: { id: 2 }, status: { utcTime: '2026-09-20T15:30:00Z', finished: false } };
   const at = (hhmm) => Date.parse(`2026-09-20T${hhmm}:00Z`);
   const s = (channel, status, extra) => ({
@@ -92,10 +92,10 @@ test('matchStreams: эфиры впереди и по зрителям, запи
   });
   const order = matchStreams(m, ['фулхэм'], ['манчестер юнайтед'], [
     s('запись-поздняя', 'finished', { created: at('14:00') }),
-    s('эфир-мало', 'started', { spectators: 150 }),
+    s('эфир-поздний', 'started', { time: at('15:20'), spectators: 5200 }),
     s('запись-ранняя', 'finished', { created: at('09:00') }),
-    s('эфир-много', 'started', { spectators: 5200 }),
+    s('эфир-ранний', 'started', { time: at('15:05'), spectators: 150 }),
     s('запись-средняя', 'finished', { created: at('12:00') }),
   ]).map((x) => x.channel);
-  assert.deepEqual(order, ['эфир-много', 'эфир-мало', 'запись-ранняя', 'запись-средняя', 'запись-поздняя']);
+  assert.deepEqual(order, ['эфир-ранний', 'эфир-поздний', 'запись-ранняя', 'запись-средняя', 'запись-поздняя'], 'зрители на порядок не влияют');
 });

@@ -33,7 +33,7 @@ function liveFotmob() {
   let goals = 0;
   let calls = 0;
   const match = () => ({
-    header: { status: { started: true, finished: false } },
+    header: { status: { started: true, finished: false, utcTime: '2026-09-19T11:30:00.000Z', halfs: { firstHalfStarted: '19.09.2026 13:31:12' } } },
     content: { matchFacts: { events: { events: Array.from({ length: goals }, (_, i) => ({
       type: 'Goal', time: 10 + i, isHome: true, player: { name: `Игрок ${i + 1}` }, newScore: [i + 1, 0],
     })) } } },
@@ -49,6 +49,7 @@ test('идущий матч отдаётся с задержкой в минут
   const first = await get('1');
   assert.equal(first.pending, true, 'сразу после открытия — ещё нечего показать');
   assert.equal(first.readyIn, DELAY_MS / 1000);
+  assert.equal(first.kickoffs.h1, Date.parse('2026-09-19T11:31:12Z'), 'время свистка — сразу: это не спойлер, по нему открываются записи');
 
   f.goal(); // гол забили через 10 секунд после открытия
   now = 30e3;
