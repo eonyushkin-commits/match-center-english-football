@@ -11,7 +11,6 @@
   },
   "scripts": {
     "app": "node scripts/electron.mjs .",
-    "start": "node src/cli.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "icon": "node scripts/electron.mjs scripts/make-icon.mjs",
     "dist": "electron-builder --win --publish never"

@@ -32,7 +32,7 @@ before(async () => {
     fotmob: { day: async () => fm, names: async () => ru },
     version: 'test',
   });
-  ({ server: srv, url: base } = await startServer(handler, { host: '127.0.0.1', port: 0 }));
+  ({ server: srv, url: base } = await startServer(handler));
 });
 after(() => srv.close());
 

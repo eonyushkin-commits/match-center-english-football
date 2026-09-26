@@ -1,4 +1,4 @@
-// Локальный сервер: страница матч-центра и её API. Один и тот же для приложения и для `npm start`.
+// Локальный сервер: страница матч-центра и её API.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { buildDay } from './day.mjs';
@@ -82,7 +82,6 @@ export function createHandler({ settings, poller, fotmob, details, version }) {
       const { streams, ...vk } = poller.snapshot();
       return { version, vk: { ...vk, streamCount: streams.length }, warnings: settings.warnings };
     },
-    'GET /api/streams': () => poller.snapshot(), // для отладки: все прочитанные эфиры
     'GET /api/match': (u) => {
       const id = u.searchParams.get('id') || '';
       if (!/^\d{1,12}$/.test(id)) throw new HttpError(400, 'id: нужен номер матча FotMob');
@@ -115,23 +114,20 @@ export function createHandler({ settings, poller, fotmob, details, version }) {
   };
 }
 
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1']);
-
-// port 0 — любой свободный порт. На 127.0.0.1 принимаем только запросы с Host этого же адреса:
+// Любой свободный порт на 127.0.0.1. Принимаем только запросы с Host этого же адреса:
 // так чужая страница не достучится до API даже через подмену DNS.
-export function startServer(handler, { host = '127.0.0.1', port = 0 } = {}) {
+export function startServer(handler) {
   return new Promise((resolve, reject) => {
-    let allowed = null;
+    let allowed = new Set();
     const server = http.createServer((req, res) => {
-      if (allowed && !allowed.has(req.headers.host)) return send(res, 403, 'Forbidden', 'text/plain');
+      if (!allowed.has(req.headers.host)) return send(res, 403, 'Forbidden', 'text/plain');
       handler(req, res);
     });
     server.once('error', reject);
-    server.listen(port, host, () => {
-      const actual = server.address().port;
-      if (LOOPBACK.has(host)) allowed = new Set([`127.0.0.1:${actual}`, `localhost:${actual}`, `[::1]:${actual}`]);
-      const shown = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
-      resolve({ server, url: `http://${shown.includes(':') ? `[${shown}]` : shown}:${actual}` });
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      allowed = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
+      resolve({ server, url: `http://127.0.0.1:${port}` });
     });
   });
 }

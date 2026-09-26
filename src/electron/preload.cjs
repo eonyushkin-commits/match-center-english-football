@@ -1,5 +1,4 @@
-// Мост между страницей матч-центра и приложением. В браузере (`npm start`) его нет —
-// страница проверяет window.mc и прячет то, что умеет только приложение.
+// Мост между страницей матч-центра и приложением.
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('mc', {

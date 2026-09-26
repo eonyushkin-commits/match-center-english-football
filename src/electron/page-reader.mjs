@@ -2,7 +2,7 @@
 // посетителя. Сессия не сохраняется на диск, картинки, шрифты и видео не загружаются.
 import { BrowserWindow, session } from 'electron';
 import { fileURLToPath } from 'node:url';
-import { CARDS_JS, fromCards, toItems } from '../core/vk-items.mjs';
+import { toItems } from '../core/vk-items.mjs';
 
 const PRELOAD = fileURLToPath(new URL('./preload-vk.cjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -48,11 +48,8 @@ async function readChannel(ch) {
     }
 
     const videos = await win.webContents.executeJavaScript('window.__mcCatalog || []');
-    if (videos.length) return toItems(videos, ch);
-
-    const cards = fromCards(await win.webContents.executeJavaScript(CARDS_JS), ch);
-    if (!cards.length) throw new Error('страница не показала ни одного эфира (доступ не из России?)');
-    return cards;
+    if (!videos.length) throw new Error('страница не показала ни одного эфира (доступ не из России?)');
+    return toItems(videos, ch);
   } finally {
     win.destroy();
   }

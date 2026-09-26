@@ -4,7 +4,7 @@ import { esc, parseAliases, parseChannel } from './format.mjs';
 const $ = (s, el) => el.querySelector(s);
 const $$ = (s, el) => [...el.querySelectorAll(s)];
 
-export function openSettingsDialog(dlg, { settings: s, isApp, save }) {
+export function openSettingsDialog(dlg, { settings: s, save }) {
   const draft = s.channels.map((c) => ({ ...c }));
   const extra = s.leagues.filter((id) => !s.knownLeagues.some((k) => k.id === id));
   const leagues = [...s.knownLeagues, ...extra.map((id) => ({ id, name: `Турнир ${id}` }))];
@@ -27,11 +27,11 @@ export function openSettingsDialog(dlg, { settings: s, isApp, save }) {
         <label class="row"><input type="checkbox" class="switch" id="notify" ${s.notifications ? 'checked' : ''}> Уведомлять о матчах избранных команд</label>
         <p class="hint">За 15 минут до начала и в начале матча — для избранных команд (★) и отмеченных матчей (🔔).
           Команды: ${s.favorites.length ? s.favorites.map((f) => esc(f.name)).join(', ') : 'пока нет'}.
-          Матчи: ${s.favoriteMatches.length ? s.favoriteMatches.map((f) => esc(f.name)).join(', ') : 'пока нет'}.${isApp ? '' : ' Уведомления работают в приложении для Windows.'}</p>
-        ${isApp ? `<label class="row"><input type="checkbox" class="switch" id="tray" ${s.tray ? 'checked' : ''}> Сворачивать в трей при закрытии окна</label>
+          Матчи: ${s.favoriteMatches.length ? s.favoriteMatches.map((f) => esc(f.name)).join(', ') : 'пока нет'}.</p>
+        <label class="row"><input type="checkbox" class="switch" id="tray" ${s.tray ? 'checked' : ''}> Сворачивать в трей при закрытии окна</label>
         <p class="hint">Так уведомления приходят и при закрытом окне. Выйти — правой кнопкой по значку в трее.</p>
         <label class="row"><input type="checkbox" class="switch" id="autostart" ${s.autostart ? 'checked' : ''}> Запускать вместе с Windows</label>
-        <p class="hint">С включённым треем приложение стартует свёрнутым.</p>` : ''}</section>
+        <p class="hint">С включённым треем приложение стартует свёрнутым.</p></section>
       <section><h3>Написание команд</h3>
         <textarea class="field" id="aliases" rows="4" placeholder="Манчестер Юнайтед = МЮ, Ман Юнайтед">${esc(aliasText)}</textarea>
         <p class="hint">Если канал пишет команду не так, как FotMob: по строке на команду, слева — название из расписания.</p></section>
@@ -104,7 +104,8 @@ export function openSettingsDialog(dlg, { settings: s, isApp, save }) {
         refreshSeconds: Number($('#refresh', dlg).value),
         notifications: $('#notify', dlg).checked,
         userAliases,
-        ...(isApp ? { tray: $('#tray', dlg).checked, autostart: $('#autostart', dlg).checked } : {}),
+        tray: $('#tray', dlg).checked,
+        autostart: $('#autostart', dlg).checked,
       });
       dlg.close();
     } catch (ex) {

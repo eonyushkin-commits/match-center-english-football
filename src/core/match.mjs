@@ -85,7 +85,7 @@ export function matchStreams(match, homeNames, awayNames, streams) {
   const kickoff = Date.parse(match.status.utcTime);
   return streams
     // time — дата создания эфира: некоторые каналы создают его за несколько дней до матча.
-    // time === null — эфир взят из карточки без даты, проверяем только названия.
+    // time === null — VK не прислал дату, проверяем только названия.
     .filter((s) => s.teams && (s.time === null || (s.time > kickoff - 5 * DAY && s.time < kickoff + 6 * 3600e3)))
     .map((s) => {
       const [a, b] = s.teams;

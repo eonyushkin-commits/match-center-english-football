@@ -76,8 +76,6 @@ async function start() {
     dataDir: app.getPath('userData'),
     fetchImpl: net.fetch, // сетевой стек Chromium: системный прокси и сертификаты как в браузере
     pageReader,
-    host: '127.0.0.1',
-    port: 0,
     version: app.getVersion(),
   });
 

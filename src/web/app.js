@@ -301,20 +301,17 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
   const m = findMatch(Number(rowKey.split(':')[1]));
   const s = m?.streams[i];
   const embed = s && embedUrl(s);
-  if (!embed) return false;
+  if (!embed) return;
   const src = playerSrc(embed, t, autoplay);
 
-  // тот же матч — переключаем канал или момент без анимации; повторный клик по эфиру закрывает плеер
+  // тот же матч — переключаем канал или момент без анимации
   if (playerEl && state.player?.rowKey === rowKey) {
-    if (state.player.i === i && t == null) closePlayer();
-    else {
-      state.player = { rowKey, i, t, autoplay };
-      playerEl.querySelector('iframe').src = src;
-      playerEl.querySelector('.ext').href = withTime(s.url, t);
-      render();
-      if (t != null) centerPlayer(playerEl); // ▶ у гола ниже по списку — плеер мог уйти за экран
-    }
-    return true;
+    state.player = { rowKey, i, t, autoplay };
+    playerEl.querySelector('iframe').src = src;
+    playerEl.querySelector('.ext').href = withTime(s.url, t);
+    render();
+    if (t != null) centerPlayer(playerEl); // ▶ у гола ниже по списку — плеер мог уйти за экран
+    return;
   }
   if (playerEl) playerEl.remove();
 
@@ -336,7 +333,6 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
   if (!state.settings?.ui.hideScores && state.details?.rowKey !== rowKey) toggleDetails(rowKey);
   render();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
-  return true;
 }
 
 function closePlayer(immediate = false) {
@@ -396,7 +392,6 @@ function openSettings() {
   togglePopover(false);
   openSettingsDialog($('#settings'), {
     settings: state.settings,
-    isApp: !!window.mc,
     save: async (patch) => {
       state.settings = await request('PUT', '/api/settings', { body: patch });
       load();

@@ -1,5 +1,4 @@
 // Всё ядро вместе: настройки, опрос каналов, FotMob, сервер и уведомления.
-// Приложение Electron и `npm start` отличаются только способом запасного чтения страницы и fetch.
 import { createDetails } from './details.mjs';
 import { createFotmob } from './fotmob.mjs';
 import { createHandler, startServer } from './server.mjs';
@@ -8,9 +7,9 @@ import { createStreamPoller } from './streams.mjs';
 import { createVkApi } from './vk-api.mjs';
 import { watchFavorites } from './watch.mjs';
 
-export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader = null, apiEnabled = true, host, port, version }) {
+export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader = null, version }) {
   const settings = await openSettings(dataDir);
-  const readers = [apiEnabled && createVkApi(fetchImpl), pageReader].filter(Boolean);
+  const readers = [createVkApi(fetchImpl), pageReader].filter(Boolean);
   const poller = createStreamPoller({
     channels: () => settings.get().channels.filter((c) => c.enabled),
     intervalMs: () => settings.get().refreshSeconds * 1000,
@@ -28,7 +27,7 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
   const watcher = watchFavorites({ poller, settings, fotmob, onEvent: (event) => listeners.forEach((fn) => fn(event)) });
   const details = createDetails({ fotmob });
 
-  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, version }), { host, port });
+  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, version }));
   poller.refresh();
 
   return {

@@ -159,41 +159,6 @@ export function applyPatch(user, patch) {
   return next;
 }
 
-// Перенос config.json первой версии: забираем только то, что пользователь действительно менял.
-// Каналов, добавленных в новых версиях, в старой копии нет — это не значит, что их выключили.
-async function migrateV1(file) {
-  let old;
-  try {
-    old = JSON.parse(await readFile(file, 'utf8'));
-  } catch {
-    return null;
-  }
-  const out = {};
-  const builtIn = new Set(defaults.channels.map((c) => c.screenName));
-  const channels = (Array.isArray(old.channels) ? old.channels : [])
-    .filter((c) => SCREEN_NAME.test(c?.screenName || '') && (!builtIn.has(c.screenName) || c.disabled))
-    .map((c) => ({
-      screenName: c.screenName,
-      ...(builtIn.has(c.screenName) ? {} : { label: c.label || c.screenName }),
-      ...(c.disabled ? { disabled: true } : {}),
-    }));
-  if (channels.length) out.channels = channels;
-  if (Array.isArray(old.leagues) && old.leagues.length && !sameList(old.leagues, defaults.leagues)) out.leagues = old.leagues;
-  if (isAliasMap(old.teamAliases)) {
-    const extra = {};
-    for (const [team, names] of Object.entries(old.teamAliases)) {
-      const known = new Set(defaults.teamAliases[team] || []);
-      const added = names.filter((n) => !known.has(n));
-      if (added.length) extra[team] = added;
-    }
-    if (Object.keys(extra).length) out.teamAliases = extra;
-  }
-  const refresh = Number(old.vkRefreshSeconds);
-  // 120 — старое значение по умолчанию, его не переносим
-  if (refresh && refresh !== 120 && refresh !== defaults.refreshSeconds) out.refreshSeconds = refresh;
-  return out;
-}
-
 export async function openSettings(dir) {
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, 'settings.json');
@@ -212,7 +177,7 @@ export async function openSettings(dir) {
     if (!user || typeof user !== 'object' || Array.isArray(user)) throw new Error('ожидался объект');
   } catch (e) {
     if (e.code === 'ENOENT') {
-      user = (await migrateV1(path.join(dir, 'config.json'))) || {};
+      user = {};
       await write(user);
     } else {
       const backup = file.replace(/\.json$/, `.broken-${Date.now()}.json`);

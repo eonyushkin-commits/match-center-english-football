@@ -1,7 +1,7 @@
 // Готовит иконки из build/icon-source.jpg или .png (скруглённый квадрат на белом фоне):
 //   build/icon.png        1024 — для установщика и .exe (electron-builder делает из неё .ico)
 //   src/electron/icon.png  256 — окно, трей, уведомления
-//   src/web/icon.png       128 — вкладка и логотип в шапке
+//   src/web/icon.png       128 — значок вкладки
 // Всё вне фигуры становится прозрачным. Край меряем по лучам из центра и подбираем по замерам
 // гладкую фигуру — суперэллипс («сквиркл») или квадрат со скруглёнными углами. Маска строится по
 // этой фигуре, а не по пикселям, поэтому она ровная и без выемок, а там, где белый рисунок
@@ -27,15 +27,6 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
     const dark = (px, py) => { const i = (py * w + px) * 4; return Math.min(d[i], d[i + 1], d[i + 2]) < 225; };
     // край — первые RUN не белых пикселей подряд: одиночные серые точки сжатия JPG у края не в счёт
     const RUN = 4;
-    const scan = (len, isDark, from, step) => {
-      for (let i = from, run = 0; i >= 0 && i < len; i += step) {
-        run = isDark(i) ? run + 1 : 0;
-        if (run === RUN) return i - step * (RUN - 1);
-      }
-      return -1;
-    };
-    const scanX = (py, from, step) => scan(w, (px) => dark(px, py), from, step);
-    const scanY = (px, from, step) => scan(h, (py) => dark(px, py), from, step);
 
     // 1. край по лучам из центра: на каждом луче идём снаружи внутрь до первых RUN не белых пикселей
     const cx = w / 2, cy = h / 2;
@@ -98,7 +89,6 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
     }
     const model = make(fine.p, fine.sc);
     const edge = Float64Array.from({ length: N }, (_, i) => model(i));
-    const fixed = N - inliers.length; // лучей, где край взят из подбора, а не из замера
 
     // 3. контур со сдвигом внутрь на inset: край исходника сглажен с белым фоном
     const shape = Array.from(edge, (ri, i) => {
@@ -107,7 +97,6 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
     });
     const xs = shape.map((p) => p[0]), ys = shape.map((p) => p[1]);
     const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys);
-    const radius = scanX(0, 0, 1); // для отчёта: где начинается прямой верхний край
 
     const side = Math.max(right - left, bottom - top);
     const ox = (left + right) / 2 - side / 2, oy = (top + bottom) / 2 - side / 2;

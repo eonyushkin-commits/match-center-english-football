@@ -53,30 +53,6 @@ test('неверные значения отклоняются с понятно
   assert.equal(applyPatch({}, { refreshSeconds: 5 }).refreshSeconds, 30);
 });
 
-test('перенос config.json первой версии', async () => {
-  const dir = await tmp();
-  await writeFile(path.join(dir, 'config.json'), JSON.stringify({
-    port: 3777,
-    vkRefreshSeconds: 120,
-    channels: [
-      { screenName: 'englishaccent', label: 'Английский Акцент' },
-      { screenName: 'pl_forever', label: 'АПЛ Навсегда' },
-      { screenName: 'my_channel', label: 'Мой канал' },
-    ],
-    leagues: [47, 48, 132, 133, 247, 42],
-    teamAliases: { 'Манчестер Сити': ['Ман Сити', 'Горожане'] },
-  }));
-  const settings = await openSettings(dir);
-  const s = settings.get();
-  assert.ok(s.channels.some((c) => c.screenName === 'vishli_football' && c.enabled), 'канала из 1.0.1 не было в старом файле — он всё равно включён');
-  assert.ok(s.channels.some((c) => c.screenName === 'my_channel' && c.label === 'Мой канал'));
-  assert.deepEqual(s.leagues, [47, 48, 132, 133, 247, 42]);
-  assert.equal(s.refreshSeconds, 60, 'старое значение по умолчанию 120 не переносится');
-  assert.deepEqual(s.userAliases, { 'Манчестер Сити': ['Горожане'] });
-  const saved = JSON.parse(await readFile(path.join(dir, 'settings.json'), 'utf8'));
-  assert.equal(saved.channels.length, 1);
-});
-
 test('сломанный файл не мешает запуску, копия сохраняется', async () => {
   const dir = await tmp();
   await writeFile(path.join(dir, 'settings.json'), '{ "leagues": [47, }');

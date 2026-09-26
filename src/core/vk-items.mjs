@@ -2,14 +2,12 @@
 import { parseTeams } from './match.mjs';
 
 // live_status из ответов vkvideo.ru → наши статусы
-export function status(s) {
+function status(s) {
   if (s === 'started') return 'started';
   if (s === 'upcoming' || s === 'waiting') return 'upcoming';
   if (s === 'failed') return 'failed';
   return 'finished'; // postlive, finished
 }
-
-const withChannel = (ch) => (s) => ({ ...s, channel: ch.label || ch.screenName, teams: parseTeams(s.title) });
 
 export function toItems(videos, ch) {
   // одно видео может прийти несколько раз (повторные запросы страницы) — берём последнюю версию
@@ -27,18 +25,9 @@ export function toItems(videos, ch) {
         created: v.date ? v.date * 1000 : null, // когда канал создал видео — по нему упорядочены записи
         spectators: Number.isFinite(v.spectators) ? v.spectators : null, // смотрят прямо сейчас — только у эфиров
         duration: v.duration > 0 ? v.duration : null, // длина записи, с
+        channel: ch.label || ch.screenName,
+        teams: parseTeams(v.title),
       };
     })
-    .map(withChannel(ch))
     .filter((s) => s.teams);
 }
-
-// Запасной путь для страницы: если формат ответов поменялся, читаем карточки (без точного времени).
-// Выполняется внутри страницы, поэтому это строка.
-export const CARDS_JS = `[...document.querySelectorAll('[data-testid="catalog_item_video"]')].map((c) => {
-  const a = c.querySelector('[data-testid="video_card_title"] a');
-  return a && { title: a.textContent.trim(), url: new URL(a.getAttribute('href'), location.href).href,
-    embed: null, status: c.querySelector('[data-testid="video_card_duration"]') ? 'finished' : 'started', time: null };
-}).filter(Boolean)`;
-
-export const fromCards = (cards, ch) => cards.map(withChannel(ch)).filter((s) => s.teams);
