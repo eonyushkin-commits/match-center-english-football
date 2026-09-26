@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { matchStreams, parseTeams } from '../src/core/match.mjs';
 import { createStreamPoller } from '../src/core/streams.mjs';
+import { createVkApi } from '../src/core/vk-api.mjs';
 import { toItems } from '../src/core/vk-items.mjs';
 
 const quiet = { warn() {}, error() {} };
@@ -98,4 +99,20 @@ test('matchStreams: эфиры впереди и по времени начал�
     s('запись-средняя', 'finished', { created: at('12:00') }),
   ]).map((x) => x.channel);
   assert.deepEqual(order, ['эфир-ранний', 'эфир-поздний', 'запись-ранняя', 'запись-средняя', 'запись-поздняя'], 'зрители на порядок не влияют');
+});
+
+test('VK API: каналы, читаемые параллельно, ждут один токен', async () => {
+  let tokens = 0;
+  const fetchImpl = async (url) => {
+    const json = url.includes('get_anonym_token')
+      ? (tokens++, { data: { access_token: 't', expired_at: Date.now() / 1000 + 3600 } })
+      : { response: { videos: [{ owner_id: -1, id: 1, title: 'Фулхэм — Челси', live_status: 'started', date: 1758380000 }] } };
+    return { ok: true, json: async () => json };
+  };
+  const api = createVkApi(fetchImpl);
+  const lists = await Promise.all(['a', 'b', 'c', 'd'].map((screenName) => api.read({ screenName })));
+  assert.equal(tokens, 1);
+  assert.ok(lists.every((l) => l.length === 1));
+  await api.read({ screenName: 'a' });
+  assert.equal(tokens, 1, 'пока токен действует, новый не нужен');
 });

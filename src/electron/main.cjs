@@ -115,6 +115,14 @@ async function start() {
     openExternal(url);
     return { action: 'deny' };
   });
+  // Окно приложения не уходит на чужую страницу (например, если плеер VK попробует открыть свой
+  // сайт на месте окна) — такая ссылка открывается в браузере
+  const keepLocal = (contents) => contents.on('will-navigate', (e, url) => {
+    if (!url.startsWith(mc.url)) {
+      e.preventDefault();
+      openExternal(url);
+    }
+  });
   win.webContents.on('did-create-window', (child) => {
     child.setMenuBarVisibility(false);
     child.setAspectRatio(16 / 9);
@@ -122,13 +130,9 @@ async function start() {
       openExternal(url);
       return { action: 'deny' };
     });
+    keepLocal(child.webContents);
   });
-  win.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(mc.url)) {
-      e.preventDefault();
-      openExternal(url);
-    }
-  });
+  keepLocal(win.webContents);
 
   // размер и положение сохраняем по ходу дела — закрытию окна ничего ждать не нужно
   let boundsTimer = null;

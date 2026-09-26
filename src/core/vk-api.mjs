@@ -13,6 +13,7 @@ const PAGES = 2; // догрузки по 20 эфиров сверх первы�
 
 export function createVkApi(fetchImpl = fetch) {
   let token = null; // { value, expires }
+  let tokenRequest = null; // каналы читаются параллельно — пусть ждут один запрос токена, а не шлют каждый свой
 
   async function post(url, body) {
     const r = await fetchImpl(url, {
@@ -27,15 +28,17 @@ export function createVkApi(fetchImpl = fetch) {
 
   async function getToken() {
     if (token && token.expires - 60e3 > Date.now()) return token.value;
-    const j = await post('https://login.vk.ru/?act=get_anonym_token', {
+    tokenRequest ??= post('https://login.vk.ru/?act=get_anonym_token', {
       client_id: CLIENT_ID, client_secret: CLIENT_SECRET, app_id: APP_ID, version: '1',
       scopes: 'audio_anonymous,video_anonymous,photos_anonymous,profile_anonymous',
       isApiOauthAnonymEnabled: 'false',
-    });
-    const t = j?.data;
-    if (!t?.access_token) throw new Error('VK не выдал анонимный токен');
-    token = { value: t.access_token, expires: t.expired_at * 1000 };
-    return token.value;
+    }).then((j) => {
+      const t = j?.data;
+      if (!t?.access_token) throw new Error('VK не выдал анонимный токен');
+      token = { value: t.access_token, expires: t.expired_at * 1000 };
+      return token.value;
+    }).finally(() => { tokenRequest = null; });
+    return tokenRequest;
   }
 
   async function call(method, params) {
