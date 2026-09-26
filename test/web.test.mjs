@@ -173,8 +173,7 @@ test('detailsHtml: без спойлеров события скрыты, пок
   assert.match(detailsHtml(match(), d, false), /⚽.*1:0/s);
 });
 
-test('detailsHtml: задержка, загрузка, ошибка, матч не начался', () => {
-  assert.match(detailsHtml(match(), { data: { pending: true, readyIn: 42, events: [] } }, false), /через 42 с/);
+test('detailsHtml: загрузка, ошибка, матч не начался', () => {
   assert.match(detailsHtml(match(), { data: null }, false), /Загрузка/);
   assert.match(detailsHtml(match(), { error: 'HTTP 500' }, false), /Не удалось загрузить: HTTP 500/);
   assert.match(detailsHtml(match(), { data: { state: 'upcoming', events: [] } }, false), /ещё не начался.*Составы появятся/s);

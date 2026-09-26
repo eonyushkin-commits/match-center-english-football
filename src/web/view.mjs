@@ -115,9 +115,8 @@ export function detailsHtml(m, d, hidden, playing = null) {
   const x = d.data;
   let events;
   if (hidden) events = `<div class="dnote">События скрыты, чтобы не выдать счёт. <button type="button" class="btn" data-reveal="${m.id}">Показать счёт и события</button></div>`;
-  else if (x.pending) events = `<div class="dnote">События появятся через ${x.readyIn} с — они идут с задержкой в минуту, чтобы не обгонять трансляцию.</div>`;
   else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
-  else events = `<ol class="timeline">${x.events.map((e) => eventHtml(e, e.kind === 'goal' ? goalSeek(m, x.kickoffs, e, playing) : null)).join('')}</ol>${x.delayed ? '<div class="dnote small">С задержкой в минуту, чтобы не обгонять трансляцию.</div>' : ''}`;
+  else events = `<ol class="timeline">${x.events.map((e) => eventHtml(e, e.kind === 'goal' ? goalSeek(m, x.kickoffs, e, playing) : null)).join('')}</ol>`;
   const lineups = x.lineups ? lineupsHtml(x.lineups, m, d.subsOpen) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
   const fotmob = `<a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть матч в FotMob">FotMob ↗</a>`;
   return `<div class="dinner"><div class="dhead"><h4>События</h4>${fotmob}</div>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;

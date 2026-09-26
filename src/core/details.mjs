@@ -1,10 +1,7 @@
 // Подробности матча из FotMob: события (голы, карточки, замены, перерыв) и составы.
-// Для идущего матча отдаём состояние минутной давности: трансляция в VK отстаёт от реального
-// времени, и свежие события раскрывали бы голы раньше, чем их покажут в эфире.
 
-export const DELAY_MS = 60e3;
-const LIVE_FETCH_MS = 20e3; // как часто спрашивать FotMob про идущий матч
-const DONE_TTL_MS = 10 * 60e3; // завершённый или не начавшийся матч меняется редко
+const FRESH_MS = 20e3; // идущий или предстоящий матч спрашиваем у FotMob не чаще раза в 20 с
+const DONE_TTL_MS = 10 * 60e3; // завершённый матч уже не меняется
 const MAX_MATCHES = 30;
 
 // «45+4»: timeStr у FotMob уже содержит добавленное время («45 + 4»), поэтому собираем из чисел
@@ -81,38 +78,23 @@ function summarize(raw) {
 }
 
 export function createDetails({ fotmob, now = () => Date.now() }) {
-  // id → { snapshots: [{ t, data }], fetchedAt, pending }
-  const cache = new Map();
-
-  async function refresh(id, entry) {
-    entry.pending ??= fotmob.match(id).then((raw) => {
-      const data = summarize(raw);
-      entry.fetchedAt = now();
-      entry.snapshots.push({ t: entry.fetchedAt, data });
-      // храним только то, что может понадобиться: последний снимок старше задержки и всё новее
-      const cutoff = entry.fetchedAt - DELAY_MS;
-      const older = entry.snapshots.filter((s) => s.t <= cutoff);
-      entry.snapshots = [...older.slice(-1), ...entry.snapshots.filter((s) => s.t > cutoff)];
-    }).finally(() => { entry.pending = null; });
-    return entry.pending;
-  }
+  const cache = new Map(); // id → { data, fetchedAt, pending }
 
   return async function get(id) {
     let entry = cache.get(id);
     if (!entry) {
-      entry = { snapshots: [], fetchedAt: 0, pending: null };
+      entry = { data: null, fetchedAt: 0, pending: null };
       cache.set(id, entry);
       while (cache.size > MAX_MATCHES) cache.delete(cache.keys().next().value);
     }
-    const last = entry.snapshots.at(-1)?.data;
-    const ttl = last?.state === 'live' ? LIVE_FETCH_MS : DONE_TTL_MS;
-    if (!last || now() - entry.fetchedAt >= ttl) await refresh(id, entry);
-
-    const latest = entry.snapshots.at(-1).data;
-    if (latest.state !== 'live') return { ...latest, delayed: false };
-    // идущий матч: самый свежий снимок, которому уже есть минута
-    const ripe = entry.snapshots.filter((s) => now() - s.t >= DELAY_MS).at(-1);
-    if (!ripe) return { state: 'live', pending: true, delayed: true, readyIn: Math.ceil((DELAY_MS - (now() - entry.snapshots[0].t)) / 1000), lineups: latest.lineups, events: [], kickoffs: latest.kickoffs };
-    return { ...ripe.data, state: 'live', delayed: true, lineups: latest.lineups };
+    const ttl = entry.data?.state === 'finished' ? DONE_TTL_MS : FRESH_MS;
+    if (!entry.data || now() - entry.fetchedAt >= ttl) {
+      entry.pending ??= fotmob.match(id).then((raw) => {
+        entry.data = summarize(raw);
+        entry.fetchedAt = now();
+      }).finally(() => { entry.pending = null; });
+      await entry.pending;
+    }
+    return entry.data;
   };
 }

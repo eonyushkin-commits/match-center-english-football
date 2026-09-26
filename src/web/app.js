@@ -22,7 +22,7 @@ const state = {
   stripStart: null, // первый день полосы дат; null — сегодня в середине
   q: '',
   player: null, // { rowKey, url, t, autoplay } — url эфира: порядок кнопок может поменяться; t: с какой секунды открыта запись
-  details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
+  details: null, // { rowKey, id, data, error } — раскрытые события и составы матча
   popped: new Set(), // строки матчей, отправленных «В окно»: кнопка «События и составы» остаётся в строке
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
@@ -70,6 +70,7 @@ async function load() {
   if (my !== ctrl) return;
   $('#refresh').classList.remove('spin');
   render();
+  if (state.details) loadDetails(); // события и составы обновляются вместе со счётом
   // пока каналы VK читаются впервые — спрашиваем чаще
   timer = setTimeout(load, !state.status?.vk.ready ? 2000 : state.error ? 15000 : 30000);
 }
@@ -235,8 +236,7 @@ function renderList() {
 
 // ---------- события и составы ----------
 function toggleDetails(rowKey) {
-  clearTimeout(state.details?.timer);
-  state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: Number(rowKey.split(':')[1]), data: null, error: null, timer: null };
+  state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: Number(rowKey.split(':')[1]), data: null, error: null };
   renderList();
   if (state.details) loadDetails();
 }
@@ -257,7 +257,6 @@ async function kickoffsOf(id) {
 async function loadDetails() {
   const d = state.details;
   if (!d) return;
-  clearTimeout(d.timer);
   try {
     d.data = await request('GET', `/api/match?id=${d.id}`);
     d.error = null;
@@ -267,9 +266,6 @@ async function loadDetails() {
   }
   if (state.details !== d) return; // пока грузили, закрыли или открыли другой матч
   renderList();
-  // идущий матч обновляем, пока панель открыта; «появятся через N с» — ровно к этому моменту
-  if (d.data?.pending) d.timer = setTimeout(loadDetails, Math.max(5, d.data.readyIn) * 1000);
-  else if (d.data?.state === 'live') d.timer = setTimeout(loadDetails, 30e3);
 }
 
 // ---------- панель каналов ----------
@@ -414,7 +410,6 @@ function setDate(d) {
   state.day = null;
   state.dayDate = null;
   state.error = null;
-  clearTimeout(state.details?.timer);
   state.details = null;
   closePlayer(true);
   renderDates();

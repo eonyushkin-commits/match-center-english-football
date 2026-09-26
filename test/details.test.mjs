@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { DELAY_MS, createDetails, parseEvents, parseLineups } from '../src/core/details.mjs';
+import { createDetails, parseEvents, parseLineups } from '../src/core/details.mjs';
 
 // Манчестер Сити — Сандерленд 5:3, 20.09.2026 — ответ FotMob, урезанный до нужных полей
 const raw = JSON.parse(readFileSync(new URL('./fixtures/fotmob-match-5795461.json', import.meta.url), 'utf8'));
@@ -41,36 +41,38 @@ function liveFotmob() {
   return { fotmob: { match: async () => { calls++; return match(); } }, goal: () => goals++, calls: () => calls };
 }
 
-test('идущий матч отдаётся с задержкой в минуту', async () => {
+test('идущий матч — сразу свежие события, FotMob не чаще раза в 20 с', async () => {
   let now = 0;
   const f = liveFotmob();
   const get = createDetails({ fotmob: f.fotmob, now: () => now });
 
   const first = await get('1');
-  assert.equal(first.pending, true, 'сразу после открытия — ещё нечего показать');
-  assert.equal(first.readyIn, DELAY_MS / 1000);
-  assert.equal(first.kickoffs.h1, Date.parse('2026-09-19T11:31:12Z'), 'время свистка — сразу: это не спойлер, по нему открываются записи');
+  assert.equal(first.state, 'live');
+  assert.equal(first.kickoffs.h1, Date.parse('2026-09-19T11:31:12Z'));
 
-  f.goal(); // гол забили через 10 секунд после открытия
-  now = 30e3;
-  assert.equal((await get('1')).pending, true);
-
-  now = 60e3; // прошла минута: показываем состояние минутной давности — ещё без гола
-  const before = await get('1');
-  assert.equal(before.pending, undefined);
-  assert.equal(before.delayed, true);
-  assert.equal(before.events.length, 0, 'гол из последней минуты не показан');
-
-  now = 95e3; // гол подтянулся в снимок на 30-й секунде, ему уже больше минуты
-  assert.equal((await get('1')).events.length, 1);
+  f.goal(); // гол забили через 5 секунд после открытия
+  now = 10e3;
+  assert.equal((await get('1')).events.length, 0, 'в пределах 20 с — из кэша');
+  now = 20e3;
+  assert.equal((await get('1')).events.length, 1, 'при следующем обновлении гол уже виден');
+  assert.equal(f.calls(), 2);
 });
 
-test('завершённый матч — без задержки и без лишних запросов', async () => {
+test('предстоящий матч перечитывается так же часто — к началу события уже идут', async () => {
+  let now = 0;
+  let started = false;
+  const get = createDetails({ fotmob: { match: async () => ({ header: { status: { started, finished: false } } }) }, now: () => now });
+  assert.equal((await get('1')).state, 'upcoming');
+  started = true;
+  now = 20e3;
+  assert.equal((await get('1')).state, 'live');
+});
+
+test('завершённый матч — без лишних запросов', async () => {
   let calls = 0;
   const get = createDetails({ fotmob: { match: async () => { calls++; return raw; } }, now: () => 0 });
   const d = await get('5795461');
   assert.equal(d.state, 'finished');
-  assert.equal(d.delayed, false);
   assert.equal(d.events.filter((e) => e.kind === 'goal').length, 8);
   await get('5795461');
   assert.equal(calls, 1, 'повторно FotMob не спрашиваем');
