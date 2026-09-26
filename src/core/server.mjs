@@ -88,6 +88,18 @@ export function createHandler({ settings, poller, fotmob, details, version }) {
       return details(id);
     },
     'GET /api/settings': () => withLeagues(settings.get()),
+    // русские названия всех турниров FotMob: { id: «Россия · ФНЛ» }, у международных — без страны
+    'GET /api/leagues': async () => {
+      const j = await fotmob.leagues();
+      const names = {};
+      for (const g of [...(j.international || []), ...(j.countries || [])]) {
+        for (const l of g.leagues || []) {
+          const name = l.localizedName || l.name;
+          names[l.id] = g.ccode === 'INT' ? name : `${g.localizedName || g.name} · ${name}`;
+        }
+      }
+      return names;
+    },
     'PUT /api/settings': async (u, req) => withLeagues(await settings.update(await readJson(req))),
     'POST /api/refresh': () => {
       poller.refresh();

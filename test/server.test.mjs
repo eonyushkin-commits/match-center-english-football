@@ -19,6 +19,10 @@ const fm = {
   ],
 };
 const ru = { Participants: { 1: 'Фулхэм', 2: 'Манчестер Юнайтед' }, TournamentTemplates: { 47: 'Премьер-Лига' }, CountryCodes: { ENG: 'Англия' } };
+const allLeagues = {
+  international: [{ ccode: 'INT', localizedName: 'Международный', leagues: [{ id: 42, name: 'Champions League', localizedName: 'Лига Чемпионов' }] }],
+  countries: [{ ccode: 'RUS', localizedName: 'Россия', leagues: [{ id: 338, name: '1. Division', localizedName: 'ФНЛ' }, { id: 9123, name: 'PFL' }] }],
+};
 const snapshot = {
   ready: true, updatedAt: 1, channels: [],
   streams: [{ title: 'Фулхэм — Манчестер Юнайтед', teams: ['фулхэм', 'манчестер юнайтед'], status: 'started', time: null, url: 'u', embed: 'e', channel: 'X' }],
@@ -29,7 +33,7 @@ before(async () => {
   const handler = createHandler({
     settings,
     poller: { snapshot: () => snapshot, refresh() {} },
-    fotmob: { day: async () => fm, names: async () => ru },
+    fotmob: { day: async () => fm, names: async () => ru, leagues: async () => allLeagues },
     version: 'test',
   });
   ({ server: srv, url: base } = await startServer(handler));
@@ -44,6 +48,10 @@ test('/api/day: только турниры из настроек, русски�
   assert.equal(m.home.name, 'Фулхэм');
   assert.equal(m.liveTime, '67’');
   assert.deepEqual(m.streams.map((s) => s.url), ['u']);
+});
+
+test('/api/leagues: «страна · турнир» по-русски, у международных без страны', async () => {
+  assert.deepEqual(await (await fetch(`${base}/api/leagues`)).json(), { 42: 'Лига Чемпионов', 338: 'Россия · ФНЛ', 9123: 'Россия · PFL' });
 });
 
 test('/api/day: неверные параметры — 400, а не падение', async () => {

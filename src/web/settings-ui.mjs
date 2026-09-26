@@ -1,13 +1,15 @@
 // Диалог настроек. save(patch) отправляет изменения на сервер; при ошибке её текст показывается в диалоге.
+// leagueNames — { id: название } всех турниров FotMob, для добавленных по номеру.
 import { esc, parseAliases, parseChannel } from './format.mjs';
 
 const $ = (s, el) => el.querySelector(s);
 const $$ = (s, el) => [...el.querySelectorAll(s)];
 
-export function openSettingsDialog(dlg, { settings: s, save }) {
+export function openSettingsDialog(dlg, { settings: s, leagueNames = {}, save }) {
   const draft = s.channels.map((c) => ({ ...c }));
   const extra = s.leagues.filter((id) => !s.knownLeagues.some((k) => k.id === id));
-  const leagues = [...s.knownLeagues, ...extra.map((id) => ({ id, name: `Турнир ${id}` }))];
+  const leagueName = (id) => leagueNames[id] || `Турнир ${id}`;
+  const leagues = [...s.knownLeagues, ...extra.map((id) => ({ id, name: leagueName(id) }))];
   const refreshOptions = [...new Set([30, 60, 120, 300, s.refreshSeconds])].sort((a, b) => a - b);
   const aliasText = Object.entries(s.userAliases).map(([t, n]) => `${t} = ${n.join(', ')}`).join('\n');
   dlg.innerHTML = `<form class="sheet" novalidate>
@@ -83,7 +85,7 @@ export function openSettingsDialog(dlg, { settings: s, save }) {
     const id = Number(($('#league-id', dlg).value.match(/\d+/) || [])[0]);
     if (!id) return;
     if (!$(`input[name="league"][value="${id}"]`, dlg))
-      $('#leagues', dlg).insertAdjacentHTML('beforeend', `<label class="check"><input type="checkbox" name="league" value="${id}" checked> Турнир ${id}</label>`);
+      $('#leagues', dlg).insertAdjacentHTML('beforeend', `<label class="check"><input type="checkbox" name="league" value="${id}" checked> ${esc(leagueName(id))}</label>`);
     else $(`input[name="league"][value="${id}"]`, dlg).checked = true;
     $('#league-id', dlg).value = '';
   });

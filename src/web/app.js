@@ -387,11 +387,15 @@ async function openMatchFromNotification(date, id) {
 window.mc?.onOpenMatch(({ date, id }) => openMatchFromNotification(date, id));
 
 // ---------- настройки ----------
-function openSettings() {
+async function openSettings() {
   if (!state.settings) return;
   togglePopover(false);
+  // названия турниров, добавленных по номеру; FotMob не ответил — будет «Турнир N»
+  const leagueNames = await request('GET', '/api/leagues').catch(() => ({}));
+  if ($('#settings').open) return; // пока ждали, диалог уже открыли
   openSettingsDialog($('#settings'), {
     settings: state.settings,
+    leagueNames,
     save: async (patch) => {
       state.settings = await request('PUT', '/api/settings', { body: patch });
       load();
