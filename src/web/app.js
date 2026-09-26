@@ -4,7 +4,7 @@ import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
 import { addDays, dateStrip, embedUrl, esc, inDateRange, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
-import { detailsHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
+import { detailsHtml, detailsToggleHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -23,6 +23,7 @@ const state = {
   q: '',
   player: null, // { rowKey, url, t, autoplay } — url эфира: порядок кнопок может поменяться; t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error, timer } — раскрытые события и составы матча
+  popped: new Set(), // строки матчей, отправленных «В окно»: кнопка «События и составы» остаётся в строке
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
   updateDismissed: null, // «версия:шаг» скрытой крестиком полосы обновления — до следующего шага или перезапуска
@@ -225,6 +226,7 @@ function renderList() {
     for (const r of s.rows) {
       items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r, view) });
       if (state.player?.rowKey === r.key && playerEl) items.push({ key: 'player', node: playerEl });
+      else if (state.popped.has(r.key)) items.push({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, state.details?.rowKey === r.key) });
       if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m), state.player?.rowKey === r.key ? state.player.url : null) });
     }
     reconcile(node.lastElementChild, items);
@@ -316,6 +318,7 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
   if (playerEl) playerEl.remove();
 
   state.player = { rowKey, url: s.url, t, autoplay };
+  state.popped.delete(rowKey); // у встроенного плеера своя кнопка «События и составы»
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
@@ -324,7 +327,7 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock"></iframe></div>
-    <button type="button" class="pmore" data-details aria-expanded="false">События и составы</button>
+    ${detailsToggleHtml(rowKey, false)}
   </div></div>`;
   el.addEventListener('transitionend', (e) => {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
@@ -368,6 +371,7 @@ function popOut() {
   const src = playerSrc(embed, state.player.t, state.player.autoplay);
   const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
+  state.popped.add(state.player.rowKey);
   closePlayer(); // в двух местах сразу один эфир не нужен
 }
 
@@ -474,9 +478,10 @@ $('#list').addEventListener('click', (e) => {
   }
   if (e.target.closest('.player .close')) { closePlayer(); return; }
   if (e.target.closest('.player .popout')) { popOut(); return; }
-  // клик по названиям команд или кнопка под плеером — события и составы
-  if (e.target.closest('[data-details], .match .teams')) {
-    toggleDetails(e.target.closest('.player') ? state.player.rowKey : e.target.closest('[data-key]').dataset.key);
+  // клик по названиям команд или кнопка «События и составы» (под плеером или у матча в окне)
+  const more = e.target.closest('[data-details]');
+  if (more || e.target.closest('.match .teams')) {
+    toggleDetails(more ? more.dataset.details : e.target.closest('[data-key]').dataset.key);
     return;
   }
   const a = e.target.closest('[data-play]');

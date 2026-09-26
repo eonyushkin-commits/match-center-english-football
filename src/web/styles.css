@@ -149,6 +149,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .phead a { color: var(--vk); font-size: 12px; }
 .phead .icon-btn { width: 30px; height: 30px; box-shadow: none; }
 .pmore { display: block; width: 100%; height: 32px; margin-top: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.popbar { padding: 0 14px 14px; border-top: 0 !important; }
+.popbar .pmore { margin-top: 0; }
 .pmore:hover { color: var(--text); border-color: var(--line-strong); }
 .pmore::after { content: " ▾"; }
 .pmore.on::after { content: " ▴"; }

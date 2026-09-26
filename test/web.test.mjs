@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
 import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, dateStrip, inDateRange } from '../src/web/format.mjs';
-import { detailsHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
+import { detailsHtml, detailsToggleHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
 const stream = (o) => ({ status: 'started', channel: 'Sportcast', title: 'Челси — Арсенал', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', ...o });
 const match = (o = {}) => ({
@@ -226,4 +226,9 @@ test('statusBadge: цвет точки по доле упавших канало
   assert.equal(statusBadge(vk([true, false])).cls, 'warn');
   assert.equal(statusBadge(vk([false, false])).cls, 'bad');
   assert.match(statusBadge(vk([true])).text, /^5 эфиров · /);
+});
+
+test('detailsToggleHtml: одна кнопка «События и составы» для плеера и для матча в окне', () => {
+  assert.match(detailsToggleHtml('live:7', true), /class="pmore on" data-details="live:7" aria-expanded="true">События и составы</);
+  assert.match(detailsToggleHtml('m:7', false), /class="pmore" data-details="m:7" aria-expanded="false"/);
 });

@@ -103,6 +103,10 @@ function goalSeek(m, k, e, playing) {
   return null;
 }
 
+// Кнопка «События и составы» — под встроенным плеером и у матча, отправленного в отдельное окно
+export const detailsToggleHtml = (rowKey, open) =>
+  `<button type="button" class="pmore${open ? ' on' : ''}" data-details="${esc(rowKey)}" aria-expanded="${open}">События и составы</button>`;
+
 // d — раскрытые подробности { data, error, subsOpen }; hidden — счёт скрыт режимом без спойлеров;
 // playing — ссылка эфира этого матча, открытого в плеере
 export function detailsHtml(m, d, hidden, playing = null) {
