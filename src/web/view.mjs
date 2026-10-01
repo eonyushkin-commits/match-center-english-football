@@ -97,7 +97,7 @@ function goalSeek(m, k, e, playing) {
   const open = m.streams.findIndex((s) => s.url === playing);
   const order = open < 0 ? m.streams.keys() : [open, ...m.streams.keys()];
   for (const i of order) {
-    const sec = m.streams[i] && m.streams[i].embed ? recordSecond(m.streams[i], at) : null;
+    const sec = m.streams[i].embed ? recordSecond(m.streams[i], at) : null;
     if (sec != null) return `${i}:${sec}`;
   }
   return null;

@@ -19,12 +19,12 @@ function setup(user = { favorites: [{ id: 2, name: 'Манчестер Юнай�
   let now = KICKOFF - 60 * MIN;
   const events = [];
   const w = watchFavorites({
-    poller, settings: { get: () => resolve(user) }, fotmob: { day: async () => fm, names: async () => ru },
-    onEvent: (e) => events.push(`${e.kind}${e.stream ? `:${e.stream.url}` : ''}`), now: () => now, intervalMs: 1e9, log: {},
+    poller, settings: { get: () => resolve(user), on() {} }, fotmob: { day: async () => fm, names: async () => ru },
+    onEvent: (e) => events.push(`${e.kind}${e.stream ? `:${e.stream.url}` : ''}`), now: () => now, log: {},
   });
   return {
     events, status,
-    at: async (t, s = streams) => { now = t; streams = s; await w.check(); },
+    at: async (t, s = streams) => { now = t; streams = s; return w.check(); },
     stop: w.stop,
   };
 }
@@ -65,6 +65,15 @@ test('приложение открыли за 5 минут до начала �
   await tooLate.at(KICKOFF + 30 * MIN);
   tooLate.stop();
   assert.deepEqual(tooLate.events, []);
+});
+
+test('следующая проверка — к ближайшему моменту: за 15 минут до начала, потом к началу', async () => {
+  const t = setup();
+  assert.equal(await t.at(KICKOFF - 60 * MIN), KICKOFF - 15 * MIN);
+  assert.equal(await t.at(KICKOFF - 15 * MIN), KICKOFF);
+  assert.equal(await t.at(KICKOFF + 1 * MIN), Infinity);
+  t.stop();
+  assert.deepEqual(t.events, ['soon', 'kickoff']);
 });
 
 test('без избранного и с выключенными уведомлениями — тишина', async () => {

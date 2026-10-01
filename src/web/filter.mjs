@@ -23,14 +23,14 @@ export function sections({ day, isToday, filters: f, q, pinned }) {
     && (!q || `${lg.name} ${lg.country}`.toLowerCase().includes(q) || `${m.home.name} ${m.away.name}`.toLowerCase().includes(q));
   const out = [];
 
-  if (isToday && !f.live) {
-    const rows = [];
-    for (const lg of day.leagues) for (const m of lg.matches) {
-      const key = `live:${m.id}`;
-      if (pinned.has(key) || (isLive(m) && m.streams.some((s) => s.status === 'started') && hit(m, lg))) rows.push({ key, m, lg, showLeague: true });
-    }
-    if (rows.length) out.push({ key: 'live', live: true, rows });
+  // без блока (не сегодня или фильтр «Идут сейчас») остаются только закреплённые строки
+  const liveBlock = isToday && !f.live;
+  const live = [];
+  for (const lg of day.leagues) for (const m of lg.matches) {
+    const key = `live:${m.id}`;
+    if (pinned.has(key) || (liveBlock && isLive(m) && m.streams.some((s) => s.status === 'started') && hit(m, lg))) live.push({ key, m, lg, showLeague: true });
   }
+  if (live.length) out.push({ key: 'live', live: true, rows: live });
   for (const lg of day.leagues) {
     const rows = lg.matches.filter((m) => pinned.has(`m:${m.id}`) || hit(m, lg)).map((m) => ({ key: `m:${m.id}`, m, lg }));
     if (rows.length) out.push({ key: `lg:${lg.id}`, lg, rows });

@@ -8,32 +8,36 @@ export function buildDay({ fm, ru, settings, snapshot }) {
   const namesOf = createNamer(ru, settings.teamAliases);
   const leagueId = (lg) => lg.primaryId ?? lg.id;
 
-  const leagues = (fm.leagues || [])
-    .filter((lg) => order.includes(leagueId(lg)))
-    .sort((a, b) => order.indexOf(leagueId(a)) - order.indexOf(leagueId(b)))
-    .map((lg) => {
-      const id = leagueId(lg); // у сезонных этапов lg.id свой (напр. 938218 у Чемпионшипа), логотип — под основным
-      return {
-        id,
-        name: ru.TournamentTemplates?.[id] || ru.TournamentTemplates?.[lg.id] || lg.name,
-        country: ru.CountryCodes?.[lg.ccode] || lg.ccode || '',
-        matches: (lg.matches || []).map((m) => ({
-          id: m.id,
-          utcTime: m.status.utcTime,
-          home: team(m.home, ru),
-          away: team(m.away, ru),
-          started: !!m.status.started,
-          finished: !!m.status.finished,
-          cancelled: !!m.status.cancelled,
-          liveTime: m.status.liveTime?.short || null, // как отдаёт FotMob: «67’», «HT»
-          reason: m.status.reason?.short || null, // «FT», «AET», «Pen»…
-          // избранный: одна из команд в избранном или сам матч отмечен колокольчиком
-          remind: favoriteMatches.has(m.id),
-          favorite: favorites.has(m.home.id) || favorites.has(m.away.id) || favoriteMatches.has(m.id),
-          streams: matchStreams(m, namesOf(m.home), namesOf(m.away), snapshot.streams),
-        })),
-      };
-    });
+  // У турнира с группами или этапами (ЧМ: «Grp. A», «Grp. B»…) FotMob отдаёт несколько записей
+  // с одним основным номером — собираем их в один раздел: раздел на странице один на номер.
+  const parts = new Map(order.map((id) => [id, []]));
+  for (const lg of fm.leagues || []) parts.get(leagueId(lg))?.push(lg);
+
+  const leagues = [...parts].filter(([, list]) => list.length).map(([id, list]) => {
+    const [lg] = list; // у сезонных этапов lg.id свой (напр. 938218 у Чемпионшипа), логотип — под основным
+    const matches = list.flatMap((part) => part.matches || []).map((m) => ({
+      id: m.id,
+      utcTime: m.status.utcTime,
+      home: team(m.home, ru),
+      away: team(m.away, ru),
+      started: !!m.status.started,
+      finished: !!m.status.finished,
+      cancelled: !!m.status.cancelled,
+      liveTime: m.status.liveTime?.short || null, // как отдаёт FotMob: «67’», «HT»
+      reason: m.status.reason?.short || null, // «FT», «AET», «Pen»…
+      // избранный: одна из команд в избранном или сам матч отмечен колокольчиком
+      remind: favoriteMatches.has(m.id),
+      favorite: favorites.has(m.home.id) || favorites.has(m.away.id) || favoriteMatches.has(m.id),
+      streams: matchStreams(m, namesOf(m.home), namesOf(m.away), snapshot.streams),
+    }));
+    if (list.length > 1) matches.sort((a, b) => Date.parse(a.utcTime) - Date.parse(b.utcTime));
+    return {
+      id,
+      name: ru.TournamentTemplates?.[id] || ru.TournamentTemplates?.[lg.id] || lg.name,
+      country: ru.CountryCodes?.[lg.ccode] || lg.ccode || '',
+      matches,
+    };
+  });
 
   return { leagues, stale: fm.stale || ru.stale || null };
 }

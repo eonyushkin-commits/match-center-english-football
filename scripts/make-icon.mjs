@@ -31,9 +31,10 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
     // 1. край по лучам из центра: на каждом луче идём снаружи внутрь до первых RUN не белых пикселей
     const cx = w / 2, cy = h / 2;
     const N = 4096; // делится на 8 — у симметричных лучей целые номера
+    const angle = (i) => (2 * Math.PI * i) / N;
     const r = new Float64Array(N);
     for (let i = 0; i < N; i++) {
-      const a = (2 * Math.PI * i) / N, dx = Math.cos(a), dy = Math.sin(a);
+      const a = angle(i), dx = Math.cos(a), dy = Math.sin(a);
       const rmax = Math.min(Math.abs(dx) > 1e-9 ? cx / Math.abs(dx) : Infinity, Math.abs(dy) > 1e-9 ? cy / Math.abs(dy) : Infinity) - 0.5;
       let run = 0;
       for (let rr = rmax; rr > 0; rr -= 0.5) {
@@ -45,7 +46,6 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
     // скруглёнными углами радиуса R. Где белый рисунок сливается с белым фоном, замер «проваливается»
     // внутрь — такие лучи в подбор не попадают: сначала подбор по медиане ошибок (устойчив, пока
     // провалов меньше половины), потом уточнение только по лучам, совпавшим с фигурой до 1,5 px.
-    const angle = (i) => (2 * Math.PI * i) / N;
     const models = {
       superellipse: (n, sc) => (i) => { const a = angle(i); return sc * Math.pow(Math.pow(Math.abs(Math.cos(a)), n) + Math.pow(Math.abs(Math.sin(a)), n), -1 / n); },
       roundrect: (R, sc) => (i) => {
@@ -92,7 +92,7 @@ const PROCESS = (dataUrl, sizes, inset) => new Promise((resolve) => {
 
     // 3. контур со сдвигом внутрь на inset: край исходника сглажен с белым фоном
     const shape = Array.from(edge, (ri, i) => {
-      const a = (2 * Math.PI * i) / N, rr = Math.max(0, ri - inset);
+      const a = angle(i), rr = Math.max(0, ri - inset);
       return [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
     });
     const xs = shape.map((p) => p[0]), ys = shape.map((p) => p[1]);

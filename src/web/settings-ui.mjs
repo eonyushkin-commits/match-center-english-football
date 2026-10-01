@@ -84,9 +84,9 @@ export function openSettingsDialog(dlg, { settings: s, leagueNames = {}, save })
   $('#league-add', dlg).addEventListener('click', () => {
     const id = Number(($('#league-id', dlg).value.match(/\d+/) || [])[0]);
     if (!id) return;
-    if (!$(`input[name="league"][value="${id}"]`, dlg))
-      $('#leagues', dlg).insertAdjacentHTML('beforeend', `<label class="check"><input type="checkbox" name="league" value="${id}" checked> ${esc(leagueName(id))}</label>`);
-    else $(`input[name="league"][value="${id}"]`, dlg).checked = true;
+    const box = $(`input[name="league"][value="${id}"]`, dlg);
+    if (box) box.checked = true;
+    else $('#leagues', dlg).insertAdjacentHTML('beforeend', `<label class="check"><input type="checkbox" name="league" value="${id}" checked> ${esc(leagueName(id))}</label>`);
     $('#league-id', dlg).value = '';
   });
 

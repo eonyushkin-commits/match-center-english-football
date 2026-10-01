@@ -3,6 +3,10 @@
 // а при сбое остаются его последние эфиры.
 import { EventEmitter } from 'node:events';
 
+// пауза запасного чтения после неудач подряд: 2, 4, 8, дальше по 10 минут
+const PAUSE_MS = 60e3;
+const MAX_PAUSE_MS = 10 * 60e3;
+
 function withTimeout(promise, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
@@ -10,45 +14,79 @@ function withTimeout(promise, ms, message) {
 }
 
 const firstLine = (s) => String(s).split('\n')[0];
+const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
-export function createStreamPoller({ channels, intervalMs, readers, timeoutMs = 45e3, log = console }) {
+export function createStreamPoller({ channels, intervalMs, readers, timeoutMs = 45e3, now = () => Date.now(), log = console }) {
   const events = new EventEmitter();
   const byChannel = new Map(); // screenName → { streams, ok, via, error, checkedAt, okAt }
+  // Запасные способы тяжёлые (скрытое окно со страницей канала): читают по одному каналу за раз,
+  // а после неудачи канал пропускает их на растущую паузу.
+  const pauses = new Map(); // screenName → { fails, until }
+  let spareQueue = Promise.resolve();
+  let forced = false; // «Обновить» по кнопке: следующий круг забывает паузы
+  let applied = null; // частота и каналы, с которыми назначен текущий круг
   let updatedAt = null;
   let timer = null;
   let running = null;
   let again = false;
   let stopped = false;
 
+  const config = () => JSON.stringify([intervalMs(), channels()]);
+
   async function read(ch) {
     const errors = [];
-    for (const reader of readers) {
+    const attempt = async (reader) => {
       try {
-        const streams = await withTimeout(reader.read(ch), timeoutMs, `нет ответа за ${timeoutMs / 1000} с`);
-        return { streams, via: reader.name };
+        return { streams: await withTimeout(reader.read(ch), timeoutMs, `нет ответа за ${timeoutMs / 1000} с`), via: reader.name };
       } catch (e) {
         errors.push(`${reader.name}: ${firstLine(e.message)}`);
+        return null;
+      }
+    };
+    const [first, ...spare] = readers;
+    let got = first ? await attempt(first) : null;
+    const pause = pauses.get(ch.screenName);
+    if (!got && spare.length) {
+      if (pause && now() < pause.until) errors.push(`запасное чтение на паузе до ${hhmm(pause.until)}`);
+      else {
+        got = await (spareQueue = spareQueue.then(async () => {
+          for (const reader of spare) {
+            const result = await attempt(reader);
+            if (result) return result;
+          }
+          return null;
+        }));
+        if (!got) {
+          const fails = (pause?.fails ?? 0) + 1;
+          pauses.set(ch.screenName, { fails, until: now() + Math.min(PAUSE_MS * 2 ** fails, MAX_PAUSE_MS) });
+        }
       }
     }
-    throw new Error(errors.join('; ') || 'нет способов чтения');
+    if (!got) throw new Error(errors.join('; ') || 'нет способов чтения');
+    pauses.delete(ch.screenName);
+    return got;
   }
 
   async function tick() {
     clearTimeout(timer);
+    applied = config();
+    if (forced) pauses.clear();
+    forced = false;
     const list = channels();
     const wanted = new Set(list.map((c) => c.screenName));
     for (const key of byChannel.keys()) if (!wanted.has(key)) byChannel.delete(key);
+    for (const key of pauses.keys()) if (!wanted.has(key)) pauses.delete(key);
 
     await Promise.all(list.map(async (ch) => {
       const prev = byChannel.get(ch.screenName);
-      const now = Date.now();
+      const at = Date.now();
       try {
         const { streams, via } = await read(ch);
-        byChannel.set(ch.screenName, { streams, ok: true, via, error: null, checkedAt: now, okAt: now });
+        byChannel.set(ch.screenName, { streams, ok: true, via, error: null, checkedAt: at, okAt: at });
       } catch (e) {
         log.warn?.(`VK ${ch.label || ch.screenName}: ${e.message}`);
         byChannel.set(ch.screenName, {
-          streams: prev?.streams || [], ok: false, via: null, error: e.message, checkedAt: now, okAt: prev?.okAt ?? null,
+          streams: prev?.streams || [], ok: false, via: null, error: e.message, checkedAt: at, okAt: prev?.okAt ?? null,
         });
       }
     }));
@@ -76,6 +114,17 @@ export function createStreamPoller({ channels, intervalMs, readers, timeoutMs = 
     return running;
   }
 
+  // Настройки поменялись: если это каналы или частота — перечитываем сразу, не дожидаясь
+  // следующего круга (он назначен ещё со старой частотой)
+  function sync() {
+    if (config() !== applied) refresh();
+  }
+
+  function retry() {
+    forced = true;
+    return refresh();
+  }
+
   function snapshot() {
     const list = channels();
     return {
@@ -99,5 +148,5 @@ export function createStreamPoller({ channels, intervalMs, readers, timeoutMs = 
     timer = null;
   }
 
-  return Object.assign(events, { refresh, snapshot, stop });
+  return Object.assign(events, { refresh, retry, sync, snapshot, stop });
 }

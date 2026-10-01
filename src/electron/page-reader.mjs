@@ -1,11 +1,11 @@
 // Запасное чтение канала: страница vkvideo.ru/@канал/lives в скрытом окне, как у обычного
 // посетителя. Сессия не сохраняется на диск, картинки, шрифты и видео не загружаются.
 import { BrowserWindow, session } from 'electron';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { toItems } from '../core/vk-items.mjs';
 
 const PRELOAD = fileURLToPath(new URL('./preload-vk.cjs', import.meta.url));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let vkSession = null;
 function getSession() {

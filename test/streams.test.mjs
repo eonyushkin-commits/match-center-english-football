@@ -63,6 +63,54 @@ test('повторный refresh во время чтения не запуск�
   assert.equal(maxRunning, channels.length);
 });
 
+test('запасной способ: по одному каналу за раз, после неудачи — растущая пауза, retry её снимает', async () => {
+  let now = 0;
+  let running = 0;
+  let maxRunning = 0;
+  let calls = 0;
+  const p = poller([
+    { name: 'api', read: async () => { throw new Error('сбой'); } },
+    { name: 'страница', read: async () => {
+      calls++;
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running--;
+      throw new Error('пусто');
+    } },
+  ], { now: () => now });
+  await p.refresh();
+  assert.equal(maxRunning, 1);
+  assert.equal(calls, 2);
+  now = 60e3; // пауза после первой неудачи — 2 минуты
+  await p.refresh();
+  assert.equal(calls, 2);
+  assert.match(p.snapshot().channels[0].error, /на паузе до/);
+  now = 2 * 60e3;
+  await p.refresh();
+  assert.equal(calls, 4);
+  now = 5 * 60e3; // после второй — 4 минуты
+  await p.refresh();
+  assert.equal(calls, 4);
+  await p.retry();
+  p.stop();
+  assert.equal(calls, 6);
+});
+
+test('sync перечитывает каналы, только если поменялись они или частота', async () => {
+  let reads = 0;
+  let interval = 1e9;
+  const p = poller([{ name: 'api', read: async () => { reads++; return []; } }], { intervalMs: () => interval });
+  await p.refresh();
+  p.sync();
+  assert.equal(reads, 2);
+  interval = 5e8;
+  p.sync();
+  await new Promise((r) => setTimeout(r, 10));
+  p.stop();
+  assert.equal(reads, 4);
+});
+
 test('toItems: повторы одного видео убираются, статусы переводятся', () => {
   const v = (status, id = 1) => ({ owner_id: -5, id, title: 'Брайтон — Арсенал | АПЛ', live_status: status, date: 1758380000, player: 'https://vkvideo.ru/video_ext.php?oid=-5&id=1&hash=x' });
   const items = toItems([v('upcoming'), v('started'), v('postlive', 2), { ...v('started', 3), title: 'Обзор тура' }], { label: 'Канал' });

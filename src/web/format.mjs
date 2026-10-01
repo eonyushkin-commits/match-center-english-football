@@ -25,6 +25,7 @@ const DATE_LIMIT = 10;
 export const inDateRange = (today, date) => Math.abs(daysBetween(today, date)) <= DATE_LIMIT;
 
 export const hhmm = (t) => new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+export const matchTitle = (m) => `${m.home.name} — ${m.away.name}`;
 export const isLive = (m) => m.started && !m.finished && !m.cancelled;
 export const STATUS = { started: 'LIVE', upcoming: 'скоро', finished: 'запись', failed: 'сбой' };
 const compact = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 }); // 18,5 тыс.

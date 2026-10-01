@@ -5,20 +5,11 @@ import { buildDay } from './day.mjs';
 import { defaults } from './settings.mjs';
 
 const WEB = new URL('../web/', import.meta.url);
-const STATIC = {
-  '/': ['index.html', 'text/html; charset=utf-8'],
-  '/index.html': ['index.html', 'text/html; charset=utf-8'],
-  '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
-  '/dom.mjs': ['dom.mjs', 'text/javascript; charset=utf-8'],
-  '/filter.mjs': ['filter.mjs', 'text/javascript; charset=utf-8'],
-  '/format.mjs': ['format.mjs', 'text/javascript; charset=utf-8'],
-  '/settings-ui.mjs': ['settings-ui.mjs', 'text/javascript; charset=utf-8'],
-  '/view.mjs': ['view.mjs', 'text/javascript; charset=utf-8'],
-  '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
-  '/icon.png': ['icon.png', 'image/png'],
-  '/player.html': ['player.html', 'text/html; charset=utf-8'],
-  '/player.js': ['player.js', 'text/javascript; charset=utf-8'],
-};
+// Отдаём только перечисленные файлы страницы
+const FILES = ['index.html', 'app.js', 'dom.mjs', 'filter.mjs', 'format.mjs', 'settings-ui.mjs', 'view.mjs', 'styles.css', 'icon.png', 'player.html', 'player.js'];
+const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', png: 'image/png' };
+const STATIC = Object.fromEntries(FILES.map((file) => [`/${file}`, [file, TYPES[file.split('.').pop()]]]));
+STATIC['/'] = STATIC['/index.html'];
 // Страница может показывать только картинки FotMob и плеер VK — всё остальное браузер заблокирует
 const CSP = [
   "default-src 'self'",
@@ -102,14 +93,15 @@ export function createHandler({ settings, poller, fotmob, details, version }) {
     },
     'PUT /api/settings': async (u, req) => withLeagues(await settings.update(await readJson(req))),
     'POST /api/refresh': () => {
-      poller.refresh();
+      poller.retry(); // по кнопке — заодно без пауз запасного чтения
       return { ok: true };
     },
   };
 
   return async (req, res) => {
-    const u = new URL(req.url, 'http://localhost');
     try {
+      const u = URL.parse(req.url, 'http://localhost');
+      if (!u) throw new HttpError(400, 'Неверный адрес');
       const route = routes[`${req.method} ${u.pathname}`];
       if (route) return send(res, 200, JSON.stringify(await route(u, req)), 'application/json; charset=utf-8');
       const file = req.method === 'GET' ? STATIC[u.pathname] : null;

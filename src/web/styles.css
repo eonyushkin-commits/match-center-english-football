@@ -108,7 +108,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .match.fav { box-shadow: inset 3px 0 0 var(--star); }
 .when { text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .when.live { color: var(--live); font-weight: 700; }
-.when small { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); font-weight: 400; }
 .teams { display: grid; gap: 4px; min-width: 0; }
 .team { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .team img { width: 18px; height: 18px; object-fit: contain; flex: none; }

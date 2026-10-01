@@ -190,7 +190,6 @@ export async function openSettings(dir) {
   let resolved = resolve(user);
   const events = new EventEmitter();
   return Object.assign(events, {
-    file,
     warnings,
     get: () => resolved,
     async update(patch) {

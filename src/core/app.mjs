@@ -17,11 +17,7 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
   });
   const fotmob = createFotmob(fetchImpl);
 
-  // поменялись каналы — перечитываем сразу, не дожидаясь следующего круга
-  settings.on('change', (next, prev) => {
-    const key = (s) => JSON.stringify(s.channels.filter((c) => c.enabled).map((c) => [c.screenName, c.label]));
-    if (key(next) !== key(prev)) poller.refresh();
-  });
+  settings.on('change', () => poller.sync());
 
   const listeners = new Set();
   const watcher = watchFavorites({ poller, settings, fotmob, onEvent: (event) => listeners.forEach((fn) => fn(event)) });
@@ -32,8 +28,6 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
 
   return {
     settings,
-    poller,
-    server,
     url,
     // уведомления о матчах избранных: { kind: soon | kickoff, date, match }
     onNotify: (fn) => listeners.add(fn),

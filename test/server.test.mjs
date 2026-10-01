@@ -32,7 +32,7 @@ before(async () => {
   const settings = await openSettings(await mkdtemp(path.join(os.tmpdir(), 'mc-server-')));
   const handler = createHandler({
     settings,
-    poller: { snapshot: () => snapshot, refresh() {} },
+    poller: { snapshot: () => snapshot, retry() {} },
     fotmob: { day: async () => fm, names: async () => ru, leagues: async () => allLeagues },
     version: 'test',
   });

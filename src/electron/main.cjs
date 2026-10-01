@@ -80,11 +80,14 @@ async function start() {
   });
 
   const s = mc.settings.get();
+  const toTray = startHidden && s.tray;
   win = new BrowserWindow({
     ...restoreBounds(s.ui.window),
     minWidth: 380,
     minHeight: 480,
     show: false,
+    // запуск сразу в трей: без этого страница считает себя видимой и опрашивает расписание впустую
+    paintWhenInitiallyHidden: !toTray,
     icon: ICON,
     title: `${TITLE} · v${app.getVersion()}`,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1116' : '#f3f5f8',
@@ -96,7 +99,7 @@ async function start() {
   });
   if (s.ui.window?.maximized) win.maximize();
   win.on('page-title-updated', (e) => e.preventDefault()); // заголовок с версией, а не <title> страницы
-  win.once('ready-to-show', () => { if (!(startHidden && s.tray)) win.show(); });
+  if (!toTray) win.once('ready-to-show', () => win.show());
 
   // Своя страница плеера открывается отдельным окном приложения, всё остальное — во внешнем браузере
   const playerPage = `${mc.url}/player.html`;
@@ -157,7 +160,6 @@ async function start() {
   });
   win.on('closed', () => {
     win = null;
-    quitting = true;
     app.quit();
   });
 
@@ -185,7 +187,7 @@ function applyAppSettings(s) {
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Открыть Матч-центр', click: showWindow },
       { type: 'separator' },
-      { label: 'Выход', click: () => { quitting = true; app.quit(); } },
+      { label: 'Выход', click: () => app.quit() },
     ]));
     tray.on('click', showWindow);
   } else if (!s.tray && tray) {
@@ -278,7 +280,7 @@ function buildMenu() {
       { role: 'zoomOut', label: 'Мельче' },
       { type: 'separator' },
       { role: 'toggleDevTools', label: 'Инструменты разработчика' },
-      { label: 'Выход', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } },
+      { label: 'Выход', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
     ],
   }]));
 }

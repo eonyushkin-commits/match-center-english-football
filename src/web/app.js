@@ -2,7 +2,7 @@
 // что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, dateStrip, embedUrl, esc, inDateRange, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
+import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, detailsToggleHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
@@ -14,7 +14,6 @@ const state = {
   settings: null, // настройки с сервера: тема, фильтры, избранное живут там, а не в браузере
   status: null,
   day: null,
-  dayDate: null, // за какую дату state.day
   error: null,
   saveError: null,
   today: ymd(new Date()),
@@ -48,31 +47,37 @@ async function request(method, url, { body, signal } = {}) {
 // Один запрос за раз: новый отменяет предыдущий, таймер следующего заводит только последний.
 let ctrl = null;
 let timer = null;
-async function load() {
+let latest = null;
+// Отменённая загрузка завершается вместе с той, что её сменила: кто ждёт load(), дождётся данных
+function load() {
+  return (latest = fetchDay());
+}
+async function fetchDay() {
   ctrl?.abort();
   const my = (ctrl = new AbortController());
   clearTimeout(timer);
-  const date = state.date;
   $('#refresh').classList.add('spin');
+  let loaded = null;
+  let error = null;
   try {
-    const [day, status] = await Promise.all([
-      request('GET', `/api/day?date=${date}&tz=${encodeURIComponent(tz)}`, { signal: my.signal }),
+    loaded = await Promise.all([
+      request('GET', `/api/day?date=${state.date}&tz=${encodeURIComponent(tz)}`, { signal: my.signal }),
       request('GET', '/api/status', { signal: my.signal }),
     ]);
-    state.day = day;
-    state.dayDate = date;
-    state.status = status;
-    state.error = null;
   } catch (e) {
-    if (my.signal.aborted) return;
-    state.error = e.message;
+    error = e.message;
   }
-  if (my !== ctrl) return;
+  // нас отменили — ждём ту загрузку, что пришла на смену. Состояние пишет только последняя,
+  // поэтому state.day всегда за state.date
+  if (my !== ctrl) return latest;
+  if (loaded) [state.day, state.status] = loaded;
+  state.error = error;
   $('#refresh').classList.remove('spin');
   render();
   if (state.details) loadDetails(); // события и составы обновляются вместе со счётом
-  // пока каналы VK читаются впервые — спрашиваем чаще
-  timer = setTimeout(load, !state.status?.vk.ready ? 2000 : state.error ? 15000 : 30000);
+  // окно скрыто (трей, свёрнуто) — не опрашиваем: при показе загрузит visibilitychange.
+  // Пока каналы VK читаются впервые — спрашиваем чаще
+  if (!document.hidden) timer = setTimeout(load, !state.status?.vk.ready ? 2000 : state.error ? 15000 : 30000);
 }
 
 // ---------- настройки ----------
@@ -84,10 +89,7 @@ function saveUi(patch) {
   uiTimer = setTimeout(() => {
     const ui = uiPending;
     uiPending = {};
-    request('PUT', '/api/settings', { body: { ui } }).then(() => { state.saveError = null; }, (e) => {
-      state.saveError = e.message;
-      renderNotices();
-    });
+    saveNow({ ui });
   }, 400);
 }
 
@@ -113,7 +115,7 @@ function toggleRemind(m) {
   const list = state.settings.favoriteMatches;
   state.settings.favoriteMatches = list.some((f) => f.id === m.id)
     ? list.filter((f) => f.id !== m.id)
-    : [...list, { id: m.id, name: `${m.home.name} — ${m.away.name}`, utcTime: m.utcTime }];
+    : [...list, { id: m.id, name: matchTitle(m), utcTime: m.utcTime }];
   markFavorites();
   render();
   saveNow({ favoriteMatches: state.settings.favoriteMatches });
@@ -131,7 +133,7 @@ function saveNow(patch) {
 // ---------- что показывать ----------
 const sections = () => buildSections({
   day: state.day,
-  isToday: state.dayDate === state.today,
+  isToday: state.date === state.today,
   filters: state.settings.ui.filters,
   q: state.q,
   // матч с открытым плеером или подробностями не прячем никакими фильтрами
@@ -190,7 +192,7 @@ function renderNotices() {
 
 function renderList() {
   const list = $('#list');
-  if (!state.settings || !state.day || state.dayDate !== state.date) {
+  if (!state.settings || !state.day) {
     if (state.error) reconcile(list, [{ key: 'error', cls: 'empty', html: `<b>Не удалось загрузить расписание</b>${esc(state.error)}` }]);
     else reconcile(list, [1, 2, 3].map((i) => ({ key: `skeleton${i}`, cls: 'skeleton' })));
     return;
@@ -236,7 +238,7 @@ function renderList() {
 
 // ---------- события и составы ----------
 function toggleDetails(rowKey) {
-  state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: Number(rowKey.split(':')[1]), data: null, error: null };
+  state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: matchIdOf(rowKey), data: null, error: null };
   renderList();
   if (state.details) loadDetails();
 }
@@ -262,7 +264,7 @@ async function loadDetails() {
     d.error = null;
     if (d.data.kickoffs) kickoffs.set(d.id, d.data.kickoffs);
   } catch (e) {
-    d.error = e.message;
+    if (!d.data) d.error = e.message; // уже показанные события разовый сбой не стирает
   }
   if (state.details !== d) return; // пока грузили, закрыли или открыли другой матч
   renderList();
@@ -289,6 +291,9 @@ function findMatch(id) {
   for (const lg of state.day?.leagues || []) for (const m of lg.matches) if (m.id === id) return m;
   return null;
 }
+// ключ строки — «m:<id матча>» или «live:<id матча>»
+const matchIdOf = (rowKey) => Number(rowKey.split(':')[1]);
+const matchOf = (rowKey) => (rowKey ? findMatch(matchIdOf(rowKey)) : null);
 
 // t — с какой секунды открыть запись; autoplay — запустить сразу (переход к голу: иначе видна
 // обложка). Без mute=0 плеер VK при автозапуске выключает звук.
@@ -296,7 +301,7 @@ const playerSrc = (embed, t, autoplay) => `${withTime(embed, t)}${autoplay ? '&a
 
 // t — с какой секунды открыть запись (свисток, гол); без него — как обычно
 function openPlayer(rowKey, i, t = null, autoplay = false) {
-  const m = findMatch(Number(rowKey.split(':')[1]));
+  const m = matchOf(rowKey);
   const s = m?.streams[i];
   const embed = s && embedUrl(s);
   if (!embed) return;
@@ -318,7 +323,7 @@ function openPlayer(rowKey, i, t = null, autoplay = false) {
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
-    <div class="phead"><b>${esc(m.home.name)} — ${esc(m.away.name)}</b>
+    <div class="phead"><b>${esc(matchTitle(m))}</b>
       <a class="ext" href="${esc(withTime(s.url, t))}" target="_blank" rel="noopener">Открыть в VK ↗</a>
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
@@ -360,12 +365,12 @@ function centerPlayer(el) {
 // Плеер в отдельном окне: в приложении — своё окно поверх остальных, в браузере — всплывающее.
 // Окон можно открыть сколько угодно — так смотрят несколько матчей сразу.
 function popOut() {
-  const m = findMatch(Number(state.player?.rowKey.split(':')[1]));
+  const m = matchOf(state.player?.rowKey);
   const s = m?.streams.find((x) => x.url === state.player.url);
   const embed = s && embedUrl(s);
   if (!embed) return;
   const src = playerSrc(embed, state.player.t, state.player.autoplay);
-  const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${m.home.name} — ${m.away.name} · ${s.channel}` });
+  const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   state.popped.add(state.player.rowKey);
   closePlayer(); // в двух местах сразу один эфир не нужен
@@ -373,7 +378,7 @@ function popOut() {
 
 // Клик по уведомлению: день матча, строка матча и плеер, если трансляция уже идёт
 async function openMatchFromNotification(date, id) {
-  await (date !== state.date ? setDate(date) : load());
+  await setDate(date);
   const m = findMatch(id);
   if (!m) return;
   const rowKey = document.querySelector(`[data-key="live:${id}"]`) ? `live:${id}` : `m:${id}`;
@@ -387,15 +392,20 @@ async function openMatchFromNotification(date, id) {
 window.mc?.onOpenMatch(({ date, id }) => openMatchFromNotification(date, id));
 
 // ---------- настройки ----------
-async function openSettings() {
+// Названия турниров, добавленных по номеру: спрашиваем заранее, при запуске, чтобы диалог
+// открывался сразу. FotMob не ответил — будет «Турнир N», а запрос повторится при открытии.
+let leagueNames = null;
+function loadLeagueNames() {
+  if (!leagueNames) request('GET', '/api/leagues').then((names) => { leagueNames = names; }, () => {});
+}
+
+function openSettings() {
   if (!state.settings) return;
   togglePopover(false);
-  // названия турниров, добавленных по номеру; FotMob не ответил — будет «Турнир N»
-  const leagueNames = await request('GET', '/api/leagues').catch(() => ({}));
-  if ($('#settings').open) return; // пока ждали, диалог уже открыли
+  loadLeagueNames();
   openSettingsDialog($('#settings'), {
     settings: state.settings,
-    leagueNames,
+    leagueNames: leagueNames || {},
     save: async (patch) => {
       state.settings = await request('PUT', '/api/settings', { body: patch });
       load();
@@ -408,7 +418,6 @@ function setDate(d) {
   if (d === state.date) return load();
   state.date = d;
   state.day = null;
-  state.dayDate = null;
   state.error = null;
   state.details = null;
   closePlayer(true);
@@ -454,7 +463,7 @@ $('#list').addEventListener('click', (e) => {
   const star = e.target.closest('[data-fav]');
   if (star) { toggleFavorite(Number(star.dataset.fav), star.dataset.name); return; }
   if (e.target.closest('[data-remind]')) {
-    const m = findMatch(Number(e.target.closest('[data-key]').dataset.key.split(':')[1]));
+    const m = matchOf(e.target.closest('[data-key]').dataset.key);
     if (m) toggleRemind(m);
     return;
   }
@@ -484,7 +493,7 @@ $('#list').addEventListener('click', (e) => {
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
   const rowKey = a.closest('[data-key]').dataset.key;
   const i = Number(a.dataset.play);
-  const m = findMatch(Number(rowKey.split(':')[1]));
+  const m = matchOf(rowKey);
   const s = m?.streams[i];
   if (!s || !embedUrl(s)) return; // встроить нельзя — откроется ссылкой в браузере
   e.preventDefault();
@@ -556,12 +565,16 @@ document.addEventListener('keydown', (e) => {
 setInterval(() => {
   const today = ymd(new Date());
   if (today === state.today) return;
+  if (state.player) return; // матч, который смотрят через полночь, не прерываем — перейдём, когда плеер закроют
   const wasToday = state.date === state.today;
   state.today = today;
   if (wasToday) setDate(today);
   else renderDates();
 }, 30e3);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearTimeout(timer);
+  else load();
+});
 addEventListener('resize', () => { if (!$('#status-pop').hidden) togglePopover(true); });
 
 // ---------- запуск ----------
@@ -579,6 +592,7 @@ async function boot() {
   state.error = null;
   applyTheme();
   load();
+  loadLeagueNames();
   // обновления приложения: состояние на момент загрузки страницы и дальнейшие изменения
   const onUpdate = (u) => {
     state.update = u?.state && u.state !== 'none' ? u : null;
