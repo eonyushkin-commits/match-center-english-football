@@ -6,7 +6,7 @@ import { defaults } from './settings.mjs';
 
 const WEB = new URL('../web/', import.meta.url);
 // Отдаём только перечисленные файлы страницы
-const FILES = ['index.html', 'app.js', 'dom.mjs', 'filter.mjs', 'format.mjs', 'settings-ui.mjs', 'view.mjs', 'styles.css', 'icon.png', 'player.html', 'player.js'];
+const FILES = ['index.html', 'app.js', 'dom.mjs', 'filter.mjs', 'format.mjs', 'opened.mjs', 'settings-ui.mjs', 'view.mjs', 'styles.css', 'icon.png', 'player.html', 'player.js'];
 const TYPES = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', png: 'image/png' };
 const STATIC = Object.fromEntries(FILES.map((file) => [`/${file}`, [file, TYPES[file.split('.').pop()]]]));
 STATIC['/'] = STATIC['/index.html'];

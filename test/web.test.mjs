@@ -152,7 +152,7 @@ test('rowHtml: избранное и активный эфир, без кноп�
   assert.match(html, /class="star on" data-fav="20"/);
   assert.match(html, /class="star" data-fav="10"/);
   assert.equal(html.match(/ active"/g).length, 1);
-  assert.match(html, / active"[^>]*data-play="1"/, 'подсвечен эфир с этой ссылкой, где бы он ни стоял');
+  assert.match(html, / active"\s+href="https:\/\/vkvideo\.ru\/video-1_3"/, 'подсвечен эфир с этой ссылкой, где бы он ни стоял');
   assert.doesNotMatch(html, /Подробнее/);
   assert.doesNotMatch(html, /fotmob\.com\/match/, 'ссылка на FotMob — в подробностях');
 });

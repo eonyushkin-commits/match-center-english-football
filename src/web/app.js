@@ -1,8 +1,10 @@
 // Главная страница: состояние, загрузка с сервера, плеер и обработчики. Разметка — в view.mjs,
-// что показывать — в filter.mjs, форматирование — в format.mjs: они без DOM и покрыты тестами.
+// что показывать — в filter.mjs, что раскрыто — в opened.mjs, форматирование — в format.mjs:
+// они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
 import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
+import { createOpened, matchIdOf } from './opened.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, detailsToggleHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
@@ -20,13 +22,11 @@ const state = {
   date: ymd(new Date()),
   stripStart: null, // первый день полосы дат; null — сегодня в середине
   q: '',
-  player: null, // { rowKey, url, t } — url эфира: порядок кнопок может поменяться; t: с какой секунды открыта запись
-  details: null, // { rowKey, id, data, error } — раскрытые события и составы матча
-  popped: new Set(), // строки матчей, отправленных «В окно»: кнопка «События и составы» остаётся в строке
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
   updateDismissed: null, // «версия:шаг» скрытой крестиком полосы обновления — до следующего шага или перезапуска
 };
+const opened = createOpened(); // плеер, события и составы, матчи «в окне»
 let playerEl = null;
 
 // режим без спойлеров: счёт скрыт, пока его не попросят показать
@@ -74,7 +74,7 @@ async function fetchDay() {
   state.error = error;
   $('#refresh').classList.remove('spin');
   render();
-  if (state.details) loadDetails(); // события и составы обновляются вместе со счётом
+  if (opened.details) loadDetails(); // события и составы обновляются вместе со счётом
   // окно скрыто (трей, свёрнуто) — не опрашиваем: при показе загрузит visibilitychange.
   // Пока каналы VK читаются впервые — спрашиваем чаще
   if (!document.hidden) timer = setTimeout(load, !state.status?.vk.ready ? 2000 : state.error ? 15000 : 30000);
@@ -137,7 +137,7 @@ const sections = () => buildSections({
   filters: state.settings.ui.filters,
   q: state.q,
   // матч с открытым плеером или подробностями не прячем никакими фильтрами
-  pinned: new Set([state.player?.rowKey, state.details?.rowKey]),
+  pinned: opened.pinned(),
 });
 
 // ---------- отрисовка ----------
@@ -213,11 +213,11 @@ function renderList() {
       return n;
     },
   })));
-  const view = { favIds: favoriteIds(), hidden: isHidden, player: state.player };
+  const view = { favIds: favoriteIds(), hidden: isHidden, player: opened.player };
   // кнопка «События и составы» под плеером показывает, раскрыты ли они
   const pmore = playerEl?.querySelector('.pmore');
   if (pmore) {
-    const open = !!state.player && state.details?.rowKey === state.player.rowKey;
+    const open = !!opened.player && opened.details?.rowKey === opened.player.rowKey;
     pmore.classList.toggle('on', open);
     pmore.setAttribute('aria-expanded', String(open));
   }
@@ -228,19 +228,24 @@ function renderList() {
     const items = [];
     for (const r of s.rows) {
       items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r, view) });
-      if (state.player?.rowKey === r.key && playerEl) items.push({ key: 'player', node: playerEl });
-      else if (state.popped.has(r.key)) items.push({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, state.details?.rowKey === r.key) });
-      if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m)) });
+      for (const what of opened.under(r.key)) items.push(under[what](r));
     }
     reconcile(node.lastElementChild, items);
   }
 }
 
+// что идёт под строкой матча (см. opened.under)
+const under = {
+  player: () => ({ key: 'player', node: playerEl }),
+  popbar: (r) => ({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, opened.details?.rowKey === r.key) }),
+  details: (r) => ({ key: 'details', cls: 'details', html: detailsHtml(r.m, opened.details, isHidden(r.m)) }),
+};
+
 // ---------- события и составы ----------
 function toggleDetails(rowKey) {
-  state.details = state.details?.rowKey === rowKey ? null : { rowKey, id: matchIdOf(rowKey), data: null, error: null };
+  const details = opened.toggleDetails(rowKey);
   renderList();
-  if (state.details) loadDetails();
+  if (details) loadDetails();
 }
 
 // Фактическое начало таймов матча (из подробностей) — чтобы открывать записи сразу на свистке.
@@ -257,16 +262,17 @@ async function kickoffsOf(id) {
 }
 
 async function loadDetails() {
-  const d = state.details;
+  const d = opened.details;
   if (!d) return;
+  const id = matchIdOf(d.rowKey);
   try {
-    d.data = await request('GET', `/api/match?id=${d.id}`);
+    d.data = await request('GET', `/api/match?id=${id}`);
     d.error = null;
-    if (d.data.kickoffs) kickoffs.set(d.id, d.data.kickoffs);
+    if (d.data.kickoffs) kickoffs.set(id, d.data.kickoffs);
   } catch (e) {
     if (!d.data) d.error = e.message; // уже показанные события разовый сбой не стирает
   }
-  if (state.details !== d) return; // пока грузили, закрыли или открыли другой матч
+  if (opened.details !== d) return; // пока грузили, закрыли или открыли другой матч
   renderList();
 }
 
@@ -291,21 +297,20 @@ function findMatch(id) {
   for (const lg of state.day?.leagues || []) for (const m of lg.matches) if (m.id === id) return m;
   return null;
 }
-// ключ строки — «m:<id матча>» или «live:<id матча>»
-const matchIdOf = (rowKey) => Number(rowKey.split(':')[1]);
 const matchOf = (rowKey) => (rowKey ? findMatch(matchIdOf(rowKey)) : null);
 
-// t — с какой секунды открыть запись (первый свисток); без него — как обычно
-function openPlayer(rowKey, i, t = null) {
+// url — ссылка эфира; t — с какой секунды открыть запись (первый свисток), без него — как обычно
+function openPlayer(rowKey, url, t = null) {
   const m = matchOf(rowKey);
-  const s = m?.streams[i];
+  const s = m?.streams.find((x) => x.url === url);
   const embed = s && embedUrl(s);
   if (!embed) return;
   const src = withTime(embed, t);
+  const sameRow = playerEl && opened.player?.rowKey === rowKey;
+  opened.play(rowKey, url, t);
 
   // тот же матч — переключаем канал без анимации
-  if (playerEl && state.player?.rowKey === rowKey) {
-    state.player = { rowKey, url: s.url, t };
+  if (sameRow) {
     playerEl.querySelector('iframe').src = src;
     playerEl.querySelector('.ext').href = withTime(s.url, t);
     render();
@@ -313,8 +318,6 @@ function openPlayer(rowKey, i, t = null) {
   }
   if (playerEl) playerEl.remove();
 
-  state.player = { rowKey, url: s.url, t };
-  state.popped.delete(rowKey); // у встроенного плеера своя кнопка «События и составы»
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
@@ -329,7 +332,7 @@ function openPlayer(rowKey, i, t = null) {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
   });
   // события и составы сразу под трансляцией; в режиме без спойлеров — только по кнопке под плеером
-  if (!state.settings?.ui.hideScores && state.details?.rowKey !== rowKey) toggleDetails(rowKey);
+  if (!state.settings?.ui.hideScores && opened.details?.rowKey !== rowKey) toggleDetails(rowKey);
   render();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
 }
@@ -337,7 +340,7 @@ function openPlayer(rowKey, i, t = null) {
 function closePlayer(immediate = false) {
   const el = playerEl;
   playerEl = null;
-  state.player = null;
+  opened.stop();
   if (el) {
     if (immediate) el.remove();
     else {
@@ -360,15 +363,15 @@ function centerPlayer(el) {
 // Плеер в отдельном окне: в приложении — своё окно поверх остальных, в браузере — всплывающее.
 // Окон можно открыть сколько угодно — так смотрят несколько матчей сразу.
 function popOut() {
-  const m = matchOf(state.player?.rowKey);
-  const s = m?.streams.find((x) => x.url === state.player.url);
+  const p = opened.player;
+  const m = matchOf(p?.rowKey);
+  const s = m?.streams.find((x) => x.url === p.url);
   const embed = s && embedUrl(s);
   if (!embed) return;
-  const src = withTime(embed, state.player.t);
-  const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${matchTitle(m)} · ${s.channel}` });
+  const q = new URLSearchParams({ src: withTime(embed, p.t), url: withTime(s.url, p.t), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
-  state.popped.add(state.player.rowKey);
-  closePlayer(); // в двух местах сразу один эфир не нужен
+  opened.popOut(); // в двух местах сразу один эфир не нужен
+  closePlayer();
 }
 
 // Клик по уведомлению: день матча, строка матча и плеер, если трансляция уже идёт
@@ -377,8 +380,8 @@ async function openMatchFromNotification(date, id) {
   const m = findMatch(id);
   if (!m) return;
   const rowKey = document.querySelector(`[data-key="live:${id}"]`) ? `live:${id}` : `m:${id}`;
-  const i = m.streams.findIndex((s) => s.status === 'started');
-  if (i >= 0 && (state.player?.rowKey !== rowKey || state.player.url !== m.streams[i].url)) openPlayer(rowKey, i);
+  const live = m.streams.find((s) => s.status === 'started');
+  if (live && !opened.isPlaying(rowKey, live.url)) openPlayer(rowKey, live.url);
   const row = document.querySelector(`[data-key="${rowKey}"]`);
   row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row?.classList.add('flash');
@@ -414,7 +417,7 @@ function setDate(d) {
   state.date = d;
   state.day = null;
   state.error = null;
-  state.details = null;
+  opened.leaveDay();
   closePlayer(true);
   renderDates();
   scrollTo({ top: 0 });
@@ -480,16 +483,15 @@ $('#list').addEventListener('click', (e) => {
   // Ctrl/Shift/средняя кнопка — как обычная ссылка, в браузере
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
   const rowKey = a.closest('[data-key]').dataset.key;
-  const i = Number(a.dataset.play);
   const m = matchOf(rowKey);
-  const s = m?.streams[i];
+  const s = m?.streams.find((x) => x.url === a.getAttribute('href'));
   if (!s || !embedUrl(s)) return; // встроить нельзя — откроется ссылкой в браузере
   e.preventDefault();
   // повторный клик по открытому эфиру закрывает плеер
-  if (state.player?.rowKey === rowKey && state.player.url === s.url) { closePlayer(); return; }
-  if (s.status !== 'finished') { openPlayer(rowKey, i); return; }
+  if (opened.isPlaying(rowKey, s.url)) { closePlayer(); return; }
+  if (s.status !== 'finished') { openPlayer(rowKey, s.url); return; }
   // запись — на первом свистке, запуск по кнопке плеера; эфир, начатый после свистка, — с начала
-  kickoffsOf(m.id).then((k) => openPlayer(rowKey, i, recordSecond(s, k?.h1)));
+  kickoffsOf(m.id).then((k) => openPlayer(rowKey, s.url, recordSecond(s, k?.h1)));
 });
 
 // «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.
@@ -497,7 +499,7 @@ $('#list').addEventListener('click', (e) => {
 $('#list').addEventListener('toggle', (e) => {
   if (!e.target.matches?.('.lu details')) return;
   const open = e.target.open;
-  if (state.details) state.details.subsOpen = open;
+  if (opened.details) opened.details.subsOpen = open;
   for (const d of e.target.closest('.lineups').querySelectorAll('details')) if (d.open !== open) d.open = open;
 }, true);
 
@@ -535,7 +537,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') {
     if (!$('#status-pop').hidden) togglePopover(false);
-    else if (state.player) closePlayer();
+    else if (opened.player) closePlayer();
   } else if (e.key === '/') {
     e.preventDefault();
     $('#q').focus();
@@ -553,7 +555,7 @@ document.addEventListener('keydown', (e) => {
 setInterval(() => {
   const today = ymd(new Date());
   if (today === state.today) return;
-  if (state.player) return; // матч, который смотрят через полночь, не прерываем — перейдём, когда плеер закроют
+  if (opened.player) return; // матч, который смотрят через полночь, не прерываем — перейдём, когда плеер закроют
   const wasToday = state.date === state.today;
   state.today = today;
   if (wasToday) setDate(today);

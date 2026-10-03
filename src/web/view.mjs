@@ -40,7 +40,7 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
   let chips = m.streams.map((s, i) => {
     const aud = audience(s);
     return `<a class="stream ${s.status}${p?.rowKey === key && p.url === s.url ? ' active' : ''}"
-      href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(aud ? `${s.title}\n${aud.title}` : s.title)}" data-play="${i}">
+      href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(aud ? `${s.title}\n${aud.title}` : s.title)}" data-play>
       <span class="tag">${STATUS[s.status] || ''}</span>${esc(labels[i])}${aud ? `<span class="aud">${esc(aud.text)}</span>` : ''}</a>`;
   }).join('');
   if (!chips && !m.finished && !m.cancelled) {
