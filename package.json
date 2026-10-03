@@ -12,6 +12,7 @@
   "scripts": {
     "app": "node scripts/electron.mjs .",
     "test": "node --test \"test/*.test.mjs\"",
+    "smoke": "node scripts/smoke.mjs",
     "icon": "node scripts/electron.mjs scripts/make-icon.mjs",
     "dist": "electron-builder --win --publish never"
   },

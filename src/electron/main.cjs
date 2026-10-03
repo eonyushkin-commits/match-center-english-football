@@ -32,8 +32,9 @@ function restoreBounds(saved) {
   return visible ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height } : { width: saved.width, height: saved.height };
 }
 
-// запуск из исходников не должен делить профиль с установленным приложением (и мешать ему)
-if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Матч-центр (разработка)'));
+// запуск из исходников не должен делить профиль с установленным приложением (и мешать ему);
+// проверки (npm run smoke) задают свой временный профиль ключом --user-data-dir
+if (!app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'Матч-центр (разработка)'));
 
 let win = null;
 let mc = null;
