@@ -32,10 +32,10 @@ test('FotMob сменил формат после удачного ответа 
   t.mock.timers.tick(60e3);
   const day = await f.day('20260920', 'UTC');
   assert.equal(day.leagues.length, 1);
-  assert.equal(day.formatChanged, true);
-  assert.match(day.stale, changed);
+  assert.equal(day.stale.format, true);
+  assert.match(day.stale.message, changed);
   const built = buildDay({ fm: day, ru: {}, settings: resolve({}), snapshot: { streams: [] } });
-  assert.equal(built.formatChanged, true);
+  assert.equal(built.stale.format, true);
   assert.match(notices({ day: built })[0][1], /FotMob изменил формат ответа.*Показано расписание, полученное ранее/);
 });
 

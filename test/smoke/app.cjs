@@ -18,7 +18,6 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // турнир, добавленный по номеру; подсказку про трей не показываем — это настоящее уведомление Windows
 fs.mkdirSync(app.getPath('userData'), { recursive: true });
 fs.writeFileSync(path.join(app.getPath('userData'), 'settings.json'), JSON.stringify({ leagues: [47, 48, 338], ui: { trayHintShown: true } }));
-process.argv.push('--hidden'); // запуск сразу в трей, как при автозапуске
 require('../../src/electron/main.cjs');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -132,10 +131,9 @@ app.whenReady().then(async () => {
   await step('клик по уведомлению: скрытое окно показывается и открывает идущий матч в плеере', async () => {
     win.hide();
     await sleep(300);
-    const d = new Date();
-    const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    const { localYmd } = await import('../../src/core/day.mjs');
     win.showInactive(); // как openMatch в main.cjs: показать окно и попросить страницу раскрыть матч
-    win.webContents.send('open-match', { date, id: 101 });
+    win.webContents.send('open-match', { date: localYmd(new Date()), id: 101 });
     await until('плеер идущего матча', async () => /id=1&/.test(await page(`document.querySelector('.player.open iframe')?.src ?? ''`)));
     assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'live:101');
   });

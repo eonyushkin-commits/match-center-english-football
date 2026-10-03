@@ -27,12 +27,11 @@ export function createOpened() {
       player = null;
     },
 
-    // события раскрыты у одного матча; возвращает раскрытые (их нужно загрузить) или null
+    // события раскрыты у одного матча; повторное нажатие сворачивает
     toggleDetails(rowKey) {
       details = details?.rowKey === rowKey ? null : { rowKey, data: null, error: null };
-      return details;
     },
-    // другой день: плеер и события закрываются
+    // другой день: плеер и события закрываются, а окна «в окне» живут дальше
     leaveDay() {
       player = null;
       details = null;

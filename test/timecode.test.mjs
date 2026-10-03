@@ -1,14 +1,13 @@
-// Запись с первого свистка: время таймов FotMob → секунда записи VK. Реальные данные — Тоттенхэм — Астон
-// Вилла, 19.09.2026: свисток на 20:14 записи Английского Акцента и на 6:10 у ВЫШЛИ! (в эфире он
-// виден на 20:50 и 6:50 — эфир отстаёт от стадиона на 36–40 с, это и есть запас).
+// Запись с первого свистка: время начала матча FotMob → секунда записи VK. Реальные данные —
+// Тоттенхэм — Астон Вилла, 19.09.2026: свисток на 20:14 записи Английского Акцента и на 6:10 у ВЫШЛИ!
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { fotmobTime, parseKickoffs } from '../src/core/details.mjs';
+import { fotmobTime, parseKickoff } from '../src/core/details.mjs';
 import { recordSecond, withTime } from '../src/web/format.mjs';
 
 const iso = (ms) => new Date(ms).toISOString();
-const halfs = { firstHalfStarted: '19.09.2026 13:31:12', secondHalfStarted: '19.09.2026 14:39:37', firstExtraHalfStarted: '', secondExtraHalfStarted: '' };
-const k = parseKickoffs({ header: { status: { utcTime: '2026-09-19T11:30:00.000Z', halfs } } });
+const halfs = { firstHalfStarted: '19.09.2026 13:31:12', secondHalfStarted: '19.09.2026 14:39:37' };
+const kickoff = parseKickoff({ header: { status: { utcTime: '2026-09-19T11:30:00.000Z', halfs } } });
 const rec = (o) => ({ status: 'finished', channel: 'Английский Акцент', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', time: Date.parse('2026-09-19T11:10:58Z'), duration: 8748, ...o });
 
 test('fotmobTime: центральноевропейское время, летом UTC+2, зимой UTC+1', () => {
@@ -19,21 +18,19 @@ test('fotmobTime: центральноевропейское время, лет�
   assert.equal(fotmobTime('2026-09-19 13:31'), null);
 });
 
-test('parseKickoffs: таймы в UTC; без начала матча или со странным временем — null', () => {
-  assert.equal(iso(k.h1), '2026-09-19T11:31:12.000Z');
-  assert.equal(iso(k.h2), '2026-09-19T12:39:37.000Z');
-  assert.equal(k.e1, null);
-  assert.equal(parseKickoffs({ header: { status: { halfs: { firstHalfStarted: '' } } } }), null);
-  assert.equal(parseKickoffs({ header: { status: { utcTime: '2026-09-19T11:30:00Z', halfs: { firstHalfStarted: '19.09.2026 23:31:12' } } } }), null);
+test('parseKickoff: первый свисток в UTC; без начала матча или со странным временем — null', () => {
+  assert.equal(iso(kickoff), '2026-09-19T11:31:12.000Z');
+  assert.equal(parseKickoff({ header: { status: { halfs: { firstHalfStarted: '' } } } }), null);
+  assert.equal(parseKickoff({ header: { status: { utcTime: '2026-09-19T11:30:00Z', halfs: { firstHalfStarted: '19.09.2026 23:31:12' } } } }), null);
 });
 
 test('recordSecond: свисток — 20:14 у Английского Акцента, 6:10 у ВЫШЛИ!', () => {
-  assert.equal(recordSecond(rec(), k.h1), 20 * 60 + 14);
-  assert.equal(recordSecond(rec({ time: Date.parse('2026-09-19T11:25:02Z') }), k.h1), 6 * 60 + 10);
-  assert.equal(recordSecond(rec({ time: k.h1 + 60e3 }), k.h1), null, 'эфир начался после свистка');
-  assert.equal(recordSecond(rec({ duration: 600 }), k.h1), null, 'запись кончилась раньше');
-  assert.equal(recordSecond(rec({ status: 'started' }), k.h1), null, 'идущий эфир не перематываем');
-  assert.equal(recordSecond(rec({ time: null }), k.h1), null);
+  assert.equal(recordSecond(rec(), kickoff), 20 * 60 + 14);
+  assert.equal(recordSecond(rec({ time: Date.parse('2026-09-19T11:25:02Z') }), kickoff), 6 * 60 + 10);
+  assert.equal(recordSecond(rec({ time: kickoff + 60e3 }), kickoff), null, 'эфир начался после свистка');
+  assert.equal(recordSecond(rec({ duration: 600 }), kickoff), null, 'запись кончилась раньше');
+  assert.equal(recordSecond(rec({ status: 'started' }), kickoff), null, 'идущий эфир не перематываем');
+  assert.equal(recordSecond(rec({ time: null }), kickoff), null);
 });
 
 test('withTime', () => {

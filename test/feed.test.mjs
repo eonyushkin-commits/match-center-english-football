@@ -7,8 +7,8 @@ import { resolve } from '../src/core/settings.mjs';
 
 const pause = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
-function setup({ intervalMs = 1e9, retryMs = 1e9 } = {}) {
-  const state = { score: 0, streams: [], fail: null, detailsFail: null, user: {}, calls: 0 };
+function setup({ dayMs = 1e9, detailsMs = 1e9, retryMs = 1e9 } = {}) {
+  const state = { score: 0, streams: [], fail: null, detailsFail: null, user: {}, calls: 0, detailsCalls: 0 };
   const poller = Object.assign(new EventEmitter(), { snapshot: () => ({ ready: true, channels: [], streams: state.streams }) });
   const settings = Object.assign(new EventEmitter(), { warnings: [], get: () => resolve(state.user) });
   const fotmob = {
@@ -20,10 +20,11 @@ function setup({ intervalMs = 1e9, retryMs = 1e9 } = {}) {
     },
   };
   const details = async (id) => {
+    state.detailsCalls++;
     if (state.detailsFail) throw new Error(state.detailsFail);
     return { id, goals: state.score };
   };
-  const feed = createFeed({ settings, poller, fotmob, details, version: 'v', intervalMs, retryMs });
+  const feed = createFeed({ settings, poller, fotmob, details, version: 'v', dayMs, detailsMs, retryMs });
   const log = [];
   const sub = (watch = {}) => feed.subscribe({ date: '20260920', tz: 'UTC', ...watch }, (event, json) => log.push([event, JSON.parse(json)]));
   return { state, poller, settings, feed, log, sub, names: () => log.map(([e]) => e) };
@@ -49,7 +50,7 @@ test('без раскрытого матча события не запраши�
 });
 
 test('по часам присылается только изменившееся: счёт поменялся — расписание, нет — ничего', async () => {
-  const t = setup({ intervalMs: 20 });
+  const t = setup({ dayMs: 20 });
   const stop = t.sub();
   await pause();
   const before = t.log.length;
@@ -94,7 +95,7 @@ test('сбой FotMob — ошибка; после сбоя расписание
   assert.equal(t.log.at(-1)[0], 'day');
 });
 
-test('после сбоя следующий круг — через retryMs, а не через intervalMs', async () => {
+test('после сбоя следующий круг — через retryMs, а не через dayMs', async () => {
   const t = setup({ retryMs: 20 });
   t.state.fail = 'нет сети';
   const stop = t.sub();
@@ -106,7 +107,7 @@ test('после сбоя следующий круг — через retryMs, а
 });
 
 test('после отписки ничего не приходит и ядро никого не слушает', async () => {
-  const t = setup({ intervalMs: 10 });
+  const t = setup({ dayMs: 10 });
   const stop = t.sub();
   await pause();
   stop();
@@ -120,4 +121,13 @@ test('после отписки ничего не приходит и ядро �
   t.sub();
   t.feed.close();
   assert.equal(t.poller.listenerCount('update'), 0);
+});
+
+test('события раскрытого матча спрашиваются чаще расписания', async () => {
+  const t = setup({ detailsMs: 15 });
+  const stop = t.sub({ matchId: '7' });
+  await pause(60);
+  stop();
+  assert.equal(t.state.calls, 1, 'расписание — один раз');
+  assert.ok(t.state.detailsCalls >= 3, `события — по своим часам (${t.state.detailsCalls})`);
 });

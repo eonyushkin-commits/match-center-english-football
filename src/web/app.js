@@ -1,4 +1,4 @@
-// Главная страница: состояние, загрузка с сервера, плеер и обработчики. Разметка — в view.mjs,
+// Главная страница: состояние, лента с сервера, плеер и обработчики. Разметка — в view.mjs,
 // что показывать — в filter.mjs, что раскрыто — в opened.mjs, форматирование — в format.mjs:
 // они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
@@ -33,9 +33,9 @@ let playerEl = null;
 const isHidden = (m) => scoresHidden(m, { hideScores: state.settings?.ui.hideScores, revealed: state.revealed });
 
 // ---------- сеть ----------
-async function request(method, url, { body, signal } = {}) {
+async function request(method, url, { body } = {}) {
   const r = await fetch(url, {
-    method, signal, cache: 'no-store',
+    method, cache: 'no-store',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -49,8 +49,7 @@ async function request(method, url, { body, signal } = {}) {
 // само присылает расписание, состояние каналов и события матча — сразу и при каждом изменении.
 // Сменился день или раскрытый матч — подписка открывается заново; скрытое окно не подписано.
 let feed = null; // EventSource текущей подписки
-let arrived = Promise.resolve(); // выполнится, когда придёт расписание (или ошибка) текущей подписки
-let settle = null;
+let arrival = null; // { promise, resolve }: выполнится, когда придёт расписание (или ошибка) текущей подписки
 function subscribe() {
   feed?.close();
   const q = new URLSearchParams({ date: state.date, tz });
@@ -58,15 +57,13 @@ function subscribe() {
   const es = (feed = new EventSource(`/api/events?${q}`));
   $('#refresh').classList.add('spin');
 
-  // кто ждал прежнюю подписку, дождётся этой
-  const waiting = settle;
-  arrived = new Promise((resolve) => { settle = resolve; });
-  waiting?.(arrived);
-  const done = settle;
+  const mine = Promise.withResolvers();
+  arrival?.resolve(mine.promise); // кто ждал прежнюю подписку, дождётся этой
+  arrival = mine;
   const got = (error) => {
     state.error = error;
     $('#refresh').classList.remove('spin');
-    done();
+    mine.resolve();
     render();
   };
   const data = (handler) => (e) => handler(JSON.parse(e.data));
@@ -86,7 +83,7 @@ function subscribe() {
     if (!d) return;
     d.data = details;
     d.error = null;
-    if (details.kickoffs) kickoffs.set(matchIdOf(d.rowKey), details.kickoffs);
+    if (details.kickoff) kickoffs.set(matchIdOf(d.rowKey), details.kickoff);
     renderList();
   }));
   es.addEventListener('details-error', data(({ message }) => {
@@ -101,7 +98,7 @@ function subscribe() {
     got('Нет связи с приложением');
     setTimeout(() => { if (feed === es) subscribe(); }, 3000);
   };
-  return arrived;
+  return mine.promise;
 }
 
 function unsubscribe() {
@@ -277,14 +274,14 @@ function toggleDetails(rowKey) {
   subscribe(); // события матча приходят лентой, пока они раскрыты
 }
 
-// Фактическое начало таймов матча (из подробностей) — чтобы открывать записи сразу на свистке.
+// Фактическое начало матча (из подробностей) — чтобы открывать записи сразу на свистке.
 // Запоминаем только найденное: нет ответа или времени — откроем запись с начала, а спросим в следующий раз.
-const kickoffs = new Map(); // id матча → { h1, h2, e1, e2 }
-async function kickoffsOf(id) {
+const kickoffs = new Map(); // id матча → время первого свистка, мс
+async function kickoffOf(id) {
   if (!kickoffs.has(id)) {
     try {
-      const k = (await request('GET', `/api/match?id=${id}`)).kickoffs;
-      if (k) kickoffs.set(id, k);
+      const at = (await request('GET', `/api/match?id=${id}`)).kickoff;
+      if (at) kickoffs.set(id, at);
     } catch {}
   }
   return kickoffs.get(id) ?? null;
@@ -312,13 +309,19 @@ function findMatch(id) {
   return null;
 }
 const matchOf = (rowKey) => (rowKey ? findMatch(matchIdOf(rowKey)) : null);
-
-// url — ссылка эфира; t — с какой секунды открыть запись (первый свисток), без него — как обычно
-function openPlayer(rowKey, url, t = null) {
+// эфир матча по его ссылке, если его можно встроить: { m, s, embed } или null
+function streamOf(rowKey, url) {
   const m = matchOf(rowKey);
   const s = m?.streams.find((x) => x.url === url);
   const embed = s && embedUrl(s);
-  if (!embed) return;
+  return embed ? { m, s, embed } : null;
+}
+
+// url — ссылка эфира; t — с какой секунды открыть запись (первый свисток), без него — как обычно
+function openPlayer(rowKey, url, t = null) {
+  const found = streamOf(rowKey, url);
+  if (!found) return;
+  const { m, s, embed } = found;
   const src = withTime(embed, t);
   const sameRow = playerEl && opened.player?.rowKey === rowKey;
   opened.play(rowKey, url, t);
@@ -346,7 +349,10 @@ function openPlayer(rowKey, url, t = null) {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
   });
   // события и составы сразу под трансляцией; в режиме без спойлеров — только по кнопке под плеером
-  if (!state.settings?.ui.hideScores && opened.details?.rowKey !== rowKey) toggleDetails(rowKey);
+  if (!state.settings?.ui.hideScores && opened.details?.rowKey !== rowKey) {
+    opened.toggleDetails(rowKey);
+    subscribe();
+  }
   render();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
 }
@@ -378,10 +384,9 @@ function centerPlayer(el) {
 // Окон можно открыть сколько угодно — так смотрят несколько матчей сразу.
 function popOut() {
   const p = opened.player;
-  const m = matchOf(p?.rowKey);
-  const s = m?.streams.find((x) => x.url === p.url);
-  const embed = s && embedUrl(s);
-  if (!embed) return;
+  const found = p && streamOf(p.rowKey, p.url);
+  if (!found) return;
+  const { m, s, embed } = found;
   const q = new URLSearchParams({ src: withTime(embed, p.t), url: withTime(s.url, p.t), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   opened.popOut(); // в двух местах сразу один эфир не нужен
@@ -427,7 +432,7 @@ function openSettings() {
 
 // ---------- действия ----------
 function setDate(d) {
-  if (d === state.date) return feed ? arrived : subscribe();
+  if (d === state.date) return feed ? arrival.promise : subscribe();
   state.date = d;
   state.day = null;
   state.error = null;
@@ -497,15 +502,15 @@ $('#list').addEventListener('click', (e) => {
   // Ctrl/Shift/средняя кнопка — как обычная ссылка, в браузере
   if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
   const rowKey = a.closest('[data-key]').dataset.key;
-  const m = matchOf(rowKey);
-  const s = m?.streams.find((x) => x.url === a.getAttribute('href'));
-  if (!s || !embedUrl(s)) return; // встроить нельзя — откроется ссылкой в браузере
+  const found = streamOf(rowKey, a.getAttribute('href'));
+  if (!found) return; // встроить нельзя — откроется ссылкой в браузере
+  const { m, s } = found;
   e.preventDefault();
   // повторный клик по открытому эфиру закрывает плеер
   if (opened.isPlaying(rowKey, s.url)) { closePlayer(); return; }
   if (s.status !== 'finished') { openPlayer(rowKey, s.url); return; }
   // запись — на первом свистке, запуск по кнопке плеера; эфир, начатый после свистка, — с начала
-  kickoffsOf(m.id).then((k) => openPlayer(rowKey, s.url, recordSecond(s, k?.h1)));
+  kickoffOf(m.id).then((at) => openPlayer(rowKey, s.url, recordSecond(s, at)));
 });
 
 // «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.

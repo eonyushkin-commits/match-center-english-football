@@ -48,7 +48,8 @@ export function buildDay({ fm, ru, settings, snapshot }) {
     };
   });
 
-  return { leagues, stale: fm.stale || ru.stale || null, formatChanged: !!(fm.formatChanged || ru.formatChanged) };
+  // stale — { message, format }: показано полученное ранее; смена формата важнее сбоя сети
+  return { leagues, stale: [fm.stale, ru.stale].find((s) => s?.format) || fm.stale || ru.stale || null };
 }
 
 const team = (t, ru) => ({ id: t.id, name: ru.Participants?.[t.id] || t.name, score: t.score ?? null });

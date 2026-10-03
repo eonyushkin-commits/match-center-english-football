@@ -1,5 +1,5 @@
 // Расписание FotMob. Одинаковые запросы, пришедшие одновременно, объединяются; при сбое сети
-// отдаются последние полученные данные с пометкой stale, а не ошибка. Форма каждого ответа
+// отдаются последние полученные данные с пометкой stale: { message, format }, а не ошибка. Форма каждого ответа
 // проверяется на входе: см. shape.mjs.
 import { FormatError, expect, isObject } from './shape.mjs';
 
@@ -31,7 +31,7 @@ export function createFotmob(fetchImpl = fetch) {
       (e) => {
         if (hit) {
           cache.set(key, hit);
-          return { ...hit.v, stale: e.message, formatChanged: e instanceof FormatError };
+          return { ...hit.v, stale: { message: e.message, format: e instanceof FormatError } };
         }
         cache.delete(key);
         throw e;

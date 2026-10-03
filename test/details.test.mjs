@@ -11,7 +11,7 @@ test('parseEvents: голы со счётом после гола, карточ�
   const goals = ev.filter((e) => e.kind === 'goal');
   assert.equal(goals.length, 8);
   assert.deepEqual(goals.at(-1).score, [5, 3], 'итоговый счёт 5:3');
-  assert.deepEqual(goals[0], { kind: 'goal', minute: '9', min: 9, plus: 0, side: 'home', player: 'Enzo Fernández', assist: null, own: false, penalty: false, score: [1, 0] });
+  assert.deepEqual(goals[0], { kind: 'goal', minute: '9', side: 'home', player: 'Enzo Fernández', assist: null, own: false, penalty: false, score: [1, 0] });
   assert.equal(goals[2].assist, 'Antoine Semenyo', '«assist by» убран');
   assert.deepEqual(ev.find((e) => e.kind === 'card'), { kind: 'card', minute: '8', side: 'away', player: 'Dayann Méthalie', card: 'yellow' });
   assert.deepEqual(ev.find((e) => e.kind === 'sub'), { kind: 'sub', minute: '60', side: 'away', in: 'Malick Fofana', out: 'Nilson Angulo' });
@@ -48,7 +48,7 @@ test('идущий матч — сразу свежие события, FotMob �
 
   const first = await get('1');
   assert.equal(first.state, 'live');
-  assert.equal(first.kickoffs.h1, Date.parse('2026-09-19T11:31:12Z'));
+  assert.equal(first.kickoff, Date.parse('2026-09-19T11:31:12Z'));
 
   f.goal(); // гол забили через 5 секунд после открытия
   now = 10e3;

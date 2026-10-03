@@ -35,11 +35,13 @@ test('«в окне»: в строке остаётся кнопка событ�
 
 test('события раскрыты у одного матча; повторное нажатие сворачивает', () => {
   const o = createOpened();
-  assert.deepEqual(o.toggleDetails('m:1'), { rowKey: 'm:1', data: null, error: null });
+  o.toggleDetails('m:1');
+  assert.deepEqual(o.details, { rowKey: 'm:1', data: null, error: null });
   o.toggleDetails('m:2');
   assert.deepEqual(o.under('m:1'), []);
   assert.deepEqual(o.under('m:2'), ['details']);
-  assert.equal(o.toggleDetails('m:2'), null);
+  o.toggleDetails('m:2');
+  assert.equal(o.details, null);
 });
 
 test('закреплены строки с плеером и событиями; другой день закрывает оба, но не матчи в окне', () => {

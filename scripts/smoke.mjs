@@ -15,7 +15,8 @@ const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE; // с ней Electron работает как обычный Node (см. scripts/electron.mjs)
 
 const entry = fileURLToPath(new URL('../test/smoke/app.cjs', import.meta.url));
-const child = spawn(electron, [entry, `--user-data-dir=${path.join(dir, 'profile')}`, `--smoke-out=${out}`], { stdio: 'inherit', env });
+// --hidden — запуск сразу в трей, как при автозапуске с Windows
+const child = spawn(electron, [entry, '--hidden', `--user-data-dir=${path.join(dir, 'profile')}`, `--smoke-out=${out}`], { stdio: 'inherit', env });
 const timer = setTimeout(() => child.kill(), TIMEOUT_MS);
 
 child.on('exit', () => {

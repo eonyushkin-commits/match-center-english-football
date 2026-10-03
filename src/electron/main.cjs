@@ -33,7 +33,7 @@ function restoreBounds(saved) {
 }
 
 // запуск из исходников не должен делить профиль с установленным приложением (и мешать ему);
-// проверки (npm run smoke) задают свой временный профиль ключом --user-data-dir
+// заданный ключом --user-data-dir профиль не трогаем (так запускаются проверки npm run smoke)
 if (!app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'Матч-центр (разработка)'));
 
 let win = null;
@@ -87,7 +87,7 @@ async function start() {
     minWidth: 380,
     minHeight: 480,
     show: false,
-    // запуск сразу в трей: без этого страница считает себя видимой и опрашивает расписание впустую
+    // запуск сразу в трей: без этого страница считает себя видимой и подписывается на ленту впустую
     paintWhenInitiallyHidden: !toTray,
     icon: ICON,
     title: `${TITLE} · v${app.getVersion()}`,
