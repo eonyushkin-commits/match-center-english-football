@@ -51,18 +51,6 @@ export function embedUrl(s) {
   }
 }
 
-// ---------- переход по записи ----------
-// Момент события: начало его минуты («34’» — 33:00 от начала тайма, «45+4’» — 48:00) плюс 40 с.
-// Эфир канала отстаёт от стадиона примерно на 40 с, поэтому в записи на этой секунде идёт как раз
-// начало минуты, и гол появляется в первые 0–60 с.
-const HALVES = [['e2', 105], ['e1', 90], ['h2', 45], ['h1', 0]];
-const LEAD_MS = 40e3;
-export function eventMoment(kickoffs, min, plus = 0) {
-  const [half, base] = HALVES.find(([, b]) => min > b) || HALVES.at(-1);
-  const start = kickoffs?.[half];
-  return start ? start + Math.max(0, min - base - 1 + plus) * 60e3 + LEAD_MS : null;
-}
-
 // Секунда записи, на которой момент at; null — это не запись или она его не застала
 export function recordSecond(s, at) {
   if (s.status !== 'finished' || !s.time || at == null) return null;

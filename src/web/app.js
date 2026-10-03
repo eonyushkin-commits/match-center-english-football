@@ -20,7 +20,7 @@ const state = {
   date: ymd(new Date()),
   stripStart: null, // первый день полосы дат; null — сегодня в середине
   q: '',
-  player: null, // { rowKey, url, t, autoplay } — url эфира: порядок кнопок может поменяться; t: с какой секунды открыта запись
+  player: null, // { rowKey, url, t } — url эфира: порядок кнопок может поменяться; t: с какой секунды открыта запись
   details: null, // { rowKey, id, data, error } — раскрытые события и составы матча
   popped: new Set(), // строки матчей, отправленных «В окно»: кнопка «События и составы» остаётся в строке
   revealed: new Set(), // матчи, у которых в режиме без спойлеров уже показали счёт
@@ -230,7 +230,7 @@ function renderList() {
       items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r, view) });
       if (state.player?.rowKey === r.key && playerEl) items.push({ key: 'player', node: playerEl });
       else if (state.popped.has(r.key)) items.push({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, state.details?.rowKey === r.key) });
-      if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m), state.player?.rowKey === r.key ? state.player.url : null) });
+      if (state.details?.rowKey === r.key) items.push({ key: 'details', cls: 'details', html: detailsHtml(r.m, state.details, isHidden(r.m)) });
     }
     reconcile(node.lastElementChild, items);
   }
@@ -295,30 +295,25 @@ function findMatch(id) {
 const matchIdOf = (rowKey) => Number(rowKey.split(':')[1]);
 const matchOf = (rowKey) => (rowKey ? findMatch(matchIdOf(rowKey)) : null);
 
-// t — с какой секунды открыть запись; autoplay — запустить сразу (переход к голу: иначе видна
-// обложка). Без mute=0 плеер VK при автозапуске выключает звук.
-const playerSrc = (embed, t, autoplay) => `${withTime(embed, t)}${autoplay ? '&autoplay=1&mute=0' : ''}`;
-
-// t — с какой секунды открыть запись (свисток, гол); без него — как обычно
-function openPlayer(rowKey, i, t = null, autoplay = false) {
+// t — с какой секунды открыть запись (первый свисток); без него — как обычно
+function openPlayer(rowKey, i, t = null) {
   const m = matchOf(rowKey);
   const s = m?.streams[i];
   const embed = s && embedUrl(s);
   if (!embed) return;
-  const src = playerSrc(embed, t, autoplay);
+  const src = withTime(embed, t);
 
-  // тот же матч — переключаем канал или момент без анимации
+  // тот же матч — переключаем канал без анимации
   if (playerEl && state.player?.rowKey === rowKey) {
-    state.player = { rowKey, url: s.url, t, autoplay };
+    state.player = { rowKey, url: s.url, t };
     playerEl.querySelector('iframe').src = src;
     playerEl.querySelector('.ext').href = withTime(s.url, t);
     render();
-    if (t != null) centerPlayer(playerEl); // ▶ у гола ниже по списку — плеер мог уйти за экран
     return;
   }
   if (playerEl) playerEl.remove();
 
-  state.player = { rowKey, url: s.url, t, autoplay };
+  state.player = { rowKey, url: s.url, t };
   state.popped.delete(rowKey); // у встроенного плеера своя кнопка «События и составы»
   const el = (playerEl = document.createElement('div'));
   el.className = 'player';
@@ -369,7 +364,7 @@ function popOut() {
   const s = m?.streams.find((x) => x.url === state.player.url);
   const embed = s && embedUrl(s);
   if (!embed) return;
-  const src = playerSrc(embed, state.player.t, state.player.autoplay);
+  const src = withTime(embed, state.player.t);
   const q = new URLSearchParams({ src, url: withTime(s.url, state.player.t), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   state.popped.add(state.player.rowKey);
@@ -465,13 +460,6 @@ $('#list').addEventListener('click', (e) => {
   if (e.target.closest('[data-remind]')) {
     const m = matchOf(e.target.closest('[data-key]').dataset.key);
     if (m) toggleRemind(m);
-    return;
-  }
-  // ▶ у гола: запись этого матча с нужной секунды, сразу со звуком
-  const seek = e.target.closest('[data-seek]');
-  if (seek && state.details) {
-    const [i, t] = seek.dataset.seek.split(':').map(Number);
-    openPlayer(state.details.rowKey, i, t, true);
     return;
   }
   const reveal = e.target.closest('[data-reveal]');

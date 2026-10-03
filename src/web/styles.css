@@ -246,8 +246,6 @@ textarea.field { height: auto; padding: 8px 10px; width: 100%; resize: vertical;
 .ev .mid { display: flex; align-items: center; justify-content: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .ev .min { color: var(--muted); min-width: 34px; text-align: right; }
 .ev .evscore { min-width: 28px; }
-.ev .seek { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-size: 9px; line-height: 1; padding: 0 0 0 2px; }
-.ev .seek:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .evtext small { display: block; color: var(--faint); font-size: 11px; }
 .ev.sub .evtext span::before { content: "↑ "; color: var(--accent); }
 .ev.sub .evtext small::before { content: "↓ "; color: var(--live); }

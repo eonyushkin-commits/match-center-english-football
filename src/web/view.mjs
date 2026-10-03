@@ -1,5 +1,5 @@
 // Разметка: данные → HTML-строка. Без DOM и без общего состояния — всё нужное приходит аргументами.
-import { STATUS, audience, esc, eventMoment, hhmm, isLive, recordSecond } from './format.mjs';
+import { STATUS, audience, esc, hhmm, isLive } from './format.mjs';
 
 // Шапка раздела: «Сейчас в эфире» или турнир с логотипом
 export function sectionHeadHtml(s) {
@@ -64,8 +64,7 @@ export function emptyHtml(filtered) {
 // ---------- события и составы ----------
 const CARD = { yellow: '🟨', red: '🟥', yellowred: '🟨🟥' };
 
-// seek — «номер эфира:секунда» записи с этим голом или null
-function eventHtml(e, seek) {
+function eventHtml(e) {
   if (e.kind === 'half') return `<li class="ev half"><span>${esc(e.label)} · ${esc(e.score.join(':'))}</span></li>`;
   let icon = '⇄';
   let text = `<span>${esc(e.in)}</span><small>${esc(e.out)}</small>`;
@@ -78,7 +77,7 @@ function eventHtml(e, seek) {
   }
   const body = `<div class="evtext">${text}</div>`;
   return `<li class="ev ${e.kind}"><div class="h">${e.side === 'home' ? body : ''}</div>
-    <div class="mid"><span class="min">${esc(e.minute)}’</span><span class="icon">${icon}</span>${e.kind === 'goal' ? `<b class="evscore">${esc(e.score.join(':'))}</b>` : ''}${seek ? `<button type="button" class="seek" data-seek="${seek}" title="Смотреть момент в записи">▶</button>` : ''}</div>
+    <div class="mid"><span class="min">${esc(e.minute)}’</span><span class="icon">${icon}</span>${e.kind === 'goal' ? `<b class="evscore">${esc(e.score.join(':'))}</b>` : ''}</div>
     <div class="a">${e.side === 'away' ? body : ''}</div></li>`;
 }
 
@@ -90,33 +89,19 @@ function lineupsHtml(l, m, subsOpen) {
   return `<div class="lineups">${team(l.home, m.home.name)}${team(l.away, m.away.name)}</div>`;
 }
 
-// Запись с моментом гола: сначала та, что уже открыта в плеере, иначе первая, где он есть
-function goalSeek(m, k, e, playing) {
-  const at = eventMoment(k, e.min, e.plus);
-  if (at == null) return null;
-  const open = m.streams.findIndex((s) => s.url === playing);
-  const order = open < 0 ? m.streams.keys() : [open, ...m.streams.keys()];
-  for (const i of order) {
-    const sec = m.streams[i].embed ? recordSecond(m.streams[i], at) : null;
-    if (sec != null) return `${i}:${sec}`;
-  }
-  return null;
-}
-
 // Кнопка «События и составы» — под встроенным плеером и у матча, отправленного в отдельное окно
 export const detailsToggleHtml = (rowKey, open) =>
   `<button type="button" class="pmore${open ? ' on' : ''}" data-details="${esc(rowKey)}" aria-expanded="${open}">События и составы</button>`;
 
-// d — раскрытые подробности { data, error, subsOpen }; hidden — счёт скрыт режимом без спойлеров;
-// playing — ссылка эфира этого матча, открытого в плеере
-export function detailsHtml(m, d, hidden, playing = null) {
+// d — раскрытые подробности { data, error, subsOpen }; hidden — счёт скрыт режимом без спойлеров
+export function detailsHtml(m, d, hidden) {
   if (d.error) return `<div class="dnote">Не удалось загрузить: ${esc(d.error)}</div>`;
   if (!d.data) return '<div class="dnote">Загрузка…</div>';
   const x = d.data;
   let events;
   if (hidden) events = `<div class="dnote">События скрыты, чтобы не выдать счёт. <button type="button" class="btn" data-reveal="${m.id}">Показать счёт и события</button></div>`;
   else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
-  else events = `<ol class="timeline">${x.events.map((e) => eventHtml(e, e.kind === 'goal' ? goalSeek(m, x.kickoffs, e, playing) : null)).join('')}</ol>`;
+  else events = `<ol class="timeline">${x.events.map(eventHtml).join('')}</ol>`;
   const lineups = x.lineups ? lineupsHtml(x.lineups, m, d.subsOpen) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
   const fotmob = `<a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть матч в FotMob">FotMob ↗</a>`;
   return `<div class="dinner"><div class="dhead"><h4>События</h4>${fotmob}</div>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
