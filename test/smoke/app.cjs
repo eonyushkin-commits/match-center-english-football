@@ -1,10 +1,10 @@
 // Проверки в настоящем приложении: главный процесс как есть, сеть подставная, профиль временный.
 // Запуск: npm run smoke (scripts/smoke.mjs передаёт --user-data-dir и --smoke-out).
-const { app, BrowserWindow, net, shell } = require('electron');
+const { app, BrowserWindow, net, session, shell } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { create: fakeNet, VK_TOKEN_DELAY_MS } = require('./fake-net.cjs');
+const { create: fakeNet } = require('./fake-net.cjs');
 
 const OUT = app.commandLine.getSwitchValue('smoke-out');
 const results = [];
@@ -39,6 +39,12 @@ async function step(name, fn) {
 
 app.on('quit', () => save({ quit: true }));
 app.whenReady().then(async () => {
+  // сколько раз страница подписывалась на ленту
+  let subscriptions = 0;
+  session.fromPartition('matchcenter').webRequest.onBeforeRequest((d, cb) => {
+    if (d.url.includes('/api/events')) subscriptions++;
+    cb({});
+  });
   let win;
   await until('главное окно', () => (win = BrowserWindow.getAllWindows()[0]) && !win.webContents.isLoading() && win.webContents.getURL().startsWith('http'));
   const page = (code) => js(win, code);
@@ -46,19 +52,21 @@ app.whenReady().then(async () => {
   const click = (selector) => page(`document.querySelector(${JSON.stringify(selector)}).click(), true`);
   const players = () => BrowserWindow.getAllWindows().filter((w) => w !== win);
   const frame = (w = win) => js(w, `document.querySelector('iframe')?.src ?? null`);
-  const dayRequests = () => page(`performance.getEntriesByType('resource').filter((e) => e.name.includes('/api/day')).length`);
 
-  await step('запуск в трей: окно скрыто, страница не опрашивает расписание', async () => {
-    await sleep(VK_TOKEN_DELAY_MS + 1500); // каналы ещё читаются: видимое окно спрашивало бы каждые 2 с
+  await step('запуск в трей: окно скрыто, страница не подписана на ленту', async () => {
+    await sleep(1500);
     assert.equal(win.isVisible(), false);
     assert.equal(await page('document.hidden'), true);
-    assert.equal(await dayRequests(), 1);
+    assert.equal(subscriptions, 0);
   });
 
   await step('показ окна: расписание загружено, идущий матч — в блоке «Идут сейчас»', async () => {
     win.showInactive();
     await on(`document.querySelectorAll('[data-key^="m:"]').length === 3`, 'три матча в списке');
+    assert.equal(subscriptions, 1);
+    // каналы дочитываются позже расписания: эфиры появляются сами, без запроса со страницы
     await on(`/эфиров/.test(document.querySelector('#status-text').textContent)`, 'статус каналов');
+    await on(`!!document.querySelector('[data-key="m:101"] .stream[data-play]')`, 'эфиры у матча');
     assert.ok(await page(`!!document.querySelector('[data-key="live"] [data-key="live:101"]')`));
     assert.equal(await page(`document.querySelector('[data-key="m:101"] .name').textContent`), 'Арсенал');
   });
@@ -121,12 +129,28 @@ app.whenReady().then(async () => {
     await page(`document.querySelector('#settings').close(), true`);
   });
 
-  await step('крестик прячет окно в трей, приложение продолжает работать', async () => {
+  await step('клик по уведомлению: скрытое окно показывается и открывает идущий матч в плеере', async () => {
+    win.hide();
+    await sleep(300);
+    const d = new Date();
+    const date = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    win.showInactive(); // как openMatch в main.cjs: показать окно и попросить страницу раскрыть матч
+    win.webContents.send('open-match', { date, id: 101 });
+    await until('плеер идущего матча', async () => /id=1&/.test(await page(`document.querySelector('.player.open iframe')?.src ?? ''`)));
+    assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'live:101');
+  });
+
+  await step('крестик прячет окно в трей: приложение работает, лента закрыта и открывается при показе', async () => {
     for (const w of players()) w.destroy();
     win.close();
     await sleep(500);
     assert.equal(win.isDestroyed(), false);
     assert.equal(win.isVisible(), false);
+    const before = subscriptions;
+    win.showInactive();
+    await until('новая подписка при показе', () => subscriptions === before + 1);
+    win.close();
+    await sleep(300);
   });
 
   setTimeout(() => app.exit(1), 5000).unref(); // «Выход» не сработал — runner увидит, что quit не записан

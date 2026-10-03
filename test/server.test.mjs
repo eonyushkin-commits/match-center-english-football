@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
+import { createFeed } from '../src/core/feed.mjs';
 import { createHandler, startServer } from '../src/core/server.mjs';
 import { openSettings } from '../src/core/settings.mjs';
 
@@ -30,18 +32,37 @@ const snapshot = {
 
 before(async () => {
   const settings = await openSettings(await mkdtemp(path.join(os.tmpdir(), 'mc-server-')));
-  const handler = createHandler({
-    settings,
-    poller: { snapshot: () => snapshot, retry() {} },
-    fotmob: { day: async () => fm, names: async () => ru, leagues: async () => allLeagues },
-    version: 'test',
-  });
+  const poller = Object.assign(new EventEmitter(), { snapshot: () => snapshot, retry() {} });
+  const fotmob = { day: async () => fm, names: async () => ru, leagues: async () => allLeagues };
+  const details = async (id) => ({ state: 'live', events: [], id });
+  const feed = createFeed({ settings, poller, fotmob, details, version: 'test' });
+  const handler = createHandler({ settings, poller, fotmob, details, feed });
   ({ server: srv, url: base } = await startServer(handler));
 });
 after(() => srv.close());
 
-test('/api/day: только турниры из настроек, русские названия, привязанный эфир', async () => {
-  const j = await (await fetch(`${base}/api/day?date=20260920&tz=Europe/Moscow`)).json();
+// первые события ленты с такими именами: { имя: данные }
+async function events(query, names) {
+  const r = await fetch(`${base}/api/events?${query}`);
+  assert.match(r.headers.get('content-type'), /^text\/event-stream/);
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  const got = {};
+  let text = '';
+  while (names.some((n) => !(n in got))) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += value;
+    for (const [, name, data] of text.matchAll(/event: ([\w-]+)\ndata: (.*)\n\n/g)) got[name] = JSON.parse(data);
+  }
+  await reader.cancel();
+  return got;
+}
+
+test('/api/events: расписание — турниры из настроек, русские названия, привязанный эфир; каналы; события матча', async () => {
+  const { day: j, status, details } = await events('date=20260920&tz=Europe/Moscow&match=100', ['day', 'status', 'details']);
+  assert.equal(status.version, 'test');
+  assert.equal(status.vk.streamCount, 1);
+  assert.deepEqual(details, { state: 'live', events: [], id: '100' });
   assert.equal(j.leagues.length, 1);
   assert.equal(j.leagues[0].name, 'Премьер-Лига');
   const m = j.leagues[0].matches[0];
@@ -54,9 +75,10 @@ test('/api/leagues: «страна · турнир» по-русски, у ме�
   assert.deepEqual(await (await fetch(`${base}/api/leagues`)).json(), { 42: 'Лига Чемпионов', 338: 'Россия · ФНЛ', 9123: 'Россия · PFL' });
 });
 
-test('/api/day: неверные параметры — 400, а не падение', async () => {
-  assert.equal((await fetch(`${base}/api/day?date=2026-09-20`)).status, 400);
-  assert.equal((await fetch(`${base}/api/day?date=20260920&tz=Mars/Olympus`)).status, 400);
+test('/api/events: неверные параметры — 400, а не падение', async () => {
+  assert.equal((await fetch(`${base}/api/events?date=2026-09-20`)).status, 400);
+  assert.equal((await fetch(`${base}/api/events?date=20260920&tz=Mars/Olympus`)).status, 400);
+  assert.equal((await fetch(`${base}/api/events?date=20260920&match=x`)).status, 400);
 });
 
 test('/api/settings: сохранение и проверка входных данных', async () => {
@@ -67,7 +89,7 @@ test('/api/settings: сохранение и проверка входных д�
   assert.equal((await put('{"leagues": []}')).status, 400);
   assert.equal((await put('not json')).status, 400);
   assert.equal((await put('{}', 'text/plain')).status, 415, 'форма с чужой страницы не пройдёт');
-  const day = await (await fetch(`${base}/api/day?date=20260920&tz=UTC`)).json();
+  const { day } = await events('date=20260920&tz=UTC', ['day']);
   assert.equal(day.leagues[0].matches[0].favorite, true);
 });
 

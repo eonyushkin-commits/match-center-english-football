@@ -1,7 +1,6 @@
 // Локальный сервер: страница матч-центра и её API.
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { buildDay } from './day.mjs';
 import { defaults } from './settings.mjs';
 
 const WEB = new URL('../web/', import.meta.url);
@@ -58,24 +57,28 @@ function validTimeZone(tz) {
   }
 }
 
-export function createHandler({ settings, poller, fotmob, details, version }) {
+const MATCH_ID = /^\d{1,12}$/;
+
+export function createHandler({ settings, poller, fotmob, details, feed }) {
   const withLeagues = (s) => ({ ...s, knownLeagues: defaults.knownLeagues });
+
+  // Лента (Server-Sent Events): расписание дня date, состояние каналов и, если задан match,
+  // события этого матча — сразу и при каждом изменении. Подписка живёт, пока открыто соединение.
+  function events(u, res) {
+    const date = u.searchParams.get('date') || '';
+    const tz = u.searchParams.get('tz') || 'Europe/Moscow';
+    const matchId = u.searchParams.get('match');
+    if (!/^\d{8}$/.test(date)) throw new HttpError(400, 'date: нужен формат ГГГГММДД');
+    if (!validTimeZone(tz)) throw new HttpError(400, 'tz: неизвестный часовой пояс');
+    if (matchId !== null && !MATCH_ID.test(matchId)) throw new HttpError(400, 'match: нужен номер матча FotMob');
+    res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.on('close', feed.subscribe({ date, tz, matchId }, (event, json) => res.write(`event: ${event}\ndata: ${json}\n\n`)));
+  }
+
   const routes = {
-    'GET /api/day': async (u) => {
-      const date = u.searchParams.get('date') || '';
-      const tz = u.searchParams.get('tz') || 'Europe/Moscow';
-      if (!/^\d{8}$/.test(date)) throw new HttpError(400, 'date: нужен формат ГГГГММДД');
-      if (!validTimeZone(tz)) throw new HttpError(400, 'tz: неизвестный часовой пояс');
-      const [fm, ru] = await Promise.all([fotmob.day(date, tz), fotmob.names()]);
-      return buildDay({ fm, ru, settings: settings.get(), snapshot: poller.snapshot() });
-    },
-    'GET /api/status': () => {
-      const { streams, ...vk } = poller.snapshot();
-      return { version, vk: { ...vk, streamCount: streams.length }, warnings: settings.warnings };
-    },
     'GET /api/match': (u) => {
       const id = u.searchParams.get('id') || '';
-      if (!/^\d{1,12}$/.test(id)) throw new HttpError(400, 'id: нужен номер матча FotMob');
+      if (!MATCH_ID.test(id)) throw new HttpError(400, 'id: нужен номер матча FotMob');
       return details(id);
     },
     'GET /api/settings': () => withLeagues(settings.get()),
@@ -102,6 +105,7 @@ export function createHandler({ settings, poller, fotmob, details, version }) {
     try {
       const u = URL.parse(req.url, 'http://localhost');
       if (!u) throw new HttpError(400, 'Неверный адрес');
+      if (req.method === 'GET' && u.pathname === '/api/events') return events(u, res);
       const route = routes[`${req.method} ${u.pathname}`];
       if (route) return send(res, 200, JSON.stringify(await route(u, req)), 'application/json; charset=utf-8');
       const file = req.method === 'GET' ? STATIC[u.pathname] : null;

@@ -44,40 +44,69 @@ async function request(method, url, { body, signal } = {}) {
   return j;
 }
 
-// Один запрос за раз: новый отменяет предыдущий, таймер следующего заводит только последний.
-let ctrl = null;
-let timer = null;
-let latest = null;
-// Отменённая загрузка завершается вместе с той, что её сменила: кто ждёт load(), дождётся данных
-function load() {
-  return (latest = fetchDay());
-}
-async function fetchDay() {
-  ctrl?.abort();
-  const my = (ctrl = new AbortController());
-  clearTimeout(timer);
+// ---------- лента ----------
+// Страница не опрашивает сервер. Она подписана на выбранный день и раскрытый матч, а приложение
+// само присылает расписание, состояние каналов и события матча — сразу и при каждом изменении.
+// Сменился день или раскрытый матч — подписка открывается заново; скрытое окно не подписано.
+let feed = null; // EventSource текущей подписки
+let arrived = Promise.resolve(); // выполнится, когда придёт расписание (или ошибка) текущей подписки
+let settle = null;
+function subscribe() {
+  feed?.close();
+  const q = new URLSearchParams({ date: state.date, tz });
+  if (opened.details) q.set('match', matchIdOf(opened.details.rowKey));
+  const es = (feed = new EventSource(`/api/events?${q}`));
   $('#refresh').classList.add('spin');
-  let loaded = null;
-  let error = null;
-  try {
-    loaded = await Promise.all([
-      request('GET', `/api/day?date=${state.date}&tz=${encodeURIComponent(tz)}`, { signal: my.signal }),
-      request('GET', '/api/status', { signal: my.signal }),
-    ]);
-  } catch (e) {
-    error = e.message;
-  }
-  // нас отменили — ждём ту загрузку, что пришла на смену. Состояние пишет только последняя,
-  // поэтому state.day всегда за state.date
-  if (my !== ctrl) return latest;
-  if (loaded) [state.day, state.status] = loaded;
-  state.error = error;
-  $('#refresh').classList.remove('spin');
-  render();
-  if (opened.details) loadDetails(); // события и составы обновляются вместе со счётом
-  // окно скрыто (трей, свёрнуто) — не опрашиваем: при показе загрузит visibilitychange.
-  // Пока каналы VK читаются впервые — спрашиваем чаще
-  if (!document.hidden) timer = setTimeout(load, !state.status?.vk.ready ? 2000 : state.error ? 15000 : 30000);
+
+  // кто ждал прежнюю подписку, дождётся этой
+  const waiting = settle;
+  arrived = new Promise((resolve) => { settle = resolve; });
+  waiting?.(arrived);
+  const done = settle;
+  const got = (error) => {
+    state.error = error;
+    $('#refresh').classList.remove('spin');
+    done();
+    render();
+  };
+  const data = (handler) => (e) => handler(JSON.parse(e.data));
+
+  es.addEventListener('status', data((status) => {
+    state.status = status;
+    renderStatus();
+    renderNotices();
+  }));
+  es.addEventListener('day', data((day) => {
+    state.day = day;
+    got(null);
+  }));
+  es.addEventListener('day-error', data(({ message }) => got(message)));
+  es.addEventListener('details', data((details) => {
+    const d = opened.details;
+    if (!d) return;
+    d.data = details;
+    d.error = null;
+    if (details.kickoffs) kickoffs.set(matchIdOf(d.rowKey), details.kickoffs);
+    renderList();
+  }));
+  es.addEventListener('details-error', data(({ message }) => {
+    const d = opened.details;
+    if (!d || d.data) return; // уже показанные события разовый сбой не стирает
+    d.error = message;
+    renderList();
+  }));
+  // оборвалась — EventSource переподключается сам; отказал совсем — пробуем заново
+  es.onerror = () => {
+    if (es.readyState !== EventSource.CLOSED) return;
+    got('Нет связи с приложением');
+    setTimeout(() => { if (feed === es) subscribe(); }, 3000);
+  };
+  return arrived;
+}
+
+function unsubscribe() {
+  feed?.close();
+  feed = null;
 }
 
 // ---------- настройки ----------
@@ -243,9 +272,9 @@ const under = {
 
 // ---------- события и составы ----------
 function toggleDetails(rowKey) {
-  const details = opened.toggleDetails(rowKey);
+  opened.toggleDetails(rowKey);
   renderList();
-  if (details) loadDetails();
+  subscribe(); // события матча приходят лентой, пока они раскрыты
 }
 
 // Фактическое начало таймов матча (из подробностей) — чтобы открывать записи сразу на свистке.
@@ -259,21 +288,6 @@ async function kickoffsOf(id) {
     } catch {}
   }
   return kickoffs.get(id) ?? null;
-}
-
-async function loadDetails() {
-  const d = opened.details;
-  if (!d) return;
-  const id = matchIdOf(d.rowKey);
-  try {
-    d.data = await request('GET', `/api/match?id=${id}`);
-    d.error = null;
-    if (d.data.kickoffs) kickoffs.set(id, d.data.kickoffs);
-  } catch (e) {
-    if (!d.data) d.error = e.message; // уже показанные события разовый сбой не стирает
-  }
-  if (opened.details !== d) return; // пока грузили, закрыли или открыли другой матч
-  renderList();
 }
 
 // ---------- панель каналов ----------
@@ -406,14 +420,14 @@ function openSettings() {
     leagueNames: leagueNames || {},
     save: async (patch) => {
       state.settings = await request('PUT', '/api/settings', { body: patch });
-      load();
+      render(); // расписание с новыми настройками пришлёт лента
     },
   });
 }
 
 // ---------- действия ----------
 function setDate(d) {
-  if (d === state.date) return load();
+  if (d === state.date) return feed ? arrived : subscribe();
   state.date = d;
   state.day = null;
   state.error = null;
@@ -421,7 +435,7 @@ function setDate(d) {
   closePlayer(true);
   renderDates();
   scrollTo({ top: 0 });
-  return load();
+  return subscribe();
 }
 
 function setFilter(name, value) {
@@ -445,7 +459,7 @@ $('#spoilers').addEventListener('click', () => {
   render();
 });
 $('#q').addEventListener('input', (e) => { state.q = e.target.value; if (state.settings) renderList(); });
-$('#refresh').addEventListener('click', () => load());
+$('#refresh').addEventListener('click', subscribe);
 $('#open-settings').addEventListener('click', openSettings);
 $('#status').addEventListener('click', (e) => { e.stopPropagation(); togglePopover(); });
 $('#theme').addEventListener('click', () => {
@@ -516,7 +530,7 @@ document.addEventListener('click', (e) => {
     togglePopover(true);
   } else if (act === 'refresh-vk') {
     e.target.disabled = true;
-    request('POST', '/api/refresh').finally(() => setTimeout(load, 1500));
+    request('POST', '/api/refresh').catch(() => {}); // новое состояние каналов пришлёт лента
   } else if (act === 'update-download') {
     window.mc?.downloadUpdate();
   } else if (act === 'update-install') {
@@ -542,7 +556,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     $('#q').focus();
   } else if (e.code === 'KeyR') {
-    load();
+    subscribe();
   } else if (e.key === ',') {
     openSettings();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -552,7 +566,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Смена дня: если смотрели «сегодня», в полночь переходим на новый день сами
-setInterval(() => {
+function rollover() {
   const today = ymd(new Date());
   if (today === state.today) return;
   if (opened.player) return; // матч, который смотрят через полночь, не прерываем — перейдём, когда плеер закроют
@@ -560,10 +574,13 @@ setInterval(() => {
   state.today = today;
   if (wasToday) setDate(today);
   else renderDates();
-}, 30e3);
+}
+setInterval(() => { if (!document.hidden) rollover(); }, 30e3);
+// скрытое окно (трей, свёрнуто) на ленту не подписано; при показе подписывается заново
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) clearTimeout(timer);
-  else load();
+  if (document.hidden) return unsubscribe();
+  rollover();
+  if (!feed) subscribe();
 });
 addEventListener('resize', () => { if (!$('#status-pop').hidden) togglePopover(true); });
 
@@ -581,7 +598,7 @@ async function boot() {
   }
   state.error = null;
   applyTheme();
-  load();
+  if (!document.hidden) subscribe();
   loadLeagueNames();
   // обновления приложения: состояние на момент загрузки страницы и дальнейшие изменения
   const onUpdate = (u) => {

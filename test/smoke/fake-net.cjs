@@ -7,7 +7,7 @@ const details = require('../fixtures/fotmob-match-5795461.json');
 
 const MIN = 60e3;
 const TEAMS = { 1: ['Arsenal', 'Арсенал'], 2: ['Chelsea', 'Челси'], 3: ['Liverpool', 'Ливерпуль'], 4: ['Everton', 'Эвертон'], 5: ['Fulham', 'Фулхэм'], 6: ['Brentford', 'Брентфорд'] };
-const VK_TOKEN_DELAY_MS = 4000; // первое чтение каналов тянется — видно, опрашивает ли страница, пока ждёт
+const VK_TOKEN_DELAY_MS = 3000; // первое чтение каналов тянется: эфиры должны прийти на страницу сами, после расписания
 
 function create(now = Date.now()) {
   const kickoff = { 101: now - 30 * MIN, 102: now - 180 * MIN, 103: now + 120 * MIN };
@@ -68,4 +68,4 @@ function create(now = Date.now()) {
   };
 }
 
-module.exports = { create, VK_TOKEN_DELAY_MS };
+module.exports = { create };

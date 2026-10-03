@@ -1,5 +1,6 @@
 // Всё ядро вместе: настройки, опрос каналов, FotMob, сервер и уведомления.
 import { createDetails } from './details.mjs';
+import { createFeed } from './feed.mjs';
 import { createFotmob } from './fotmob.mjs';
 import { createHandler, startServer } from './server.mjs';
 import { openSettings } from './settings.mjs';
@@ -23,7 +24,9 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
   const watcher = watchFavorites({ poller, settings, fotmob, onEvent: (event) => listeners.forEach((fn) => fn(event)) });
   const details = createDetails({ fotmob });
 
-  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, version }));
+  const feed = createFeed({ settings, poller, fotmob, details, version });
+
+  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, feed }));
   poller.refresh();
 
   return {
@@ -34,7 +37,9 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
     close() {
       poller.stop();
       watcher.stop();
+      feed.close();
       server.close();
+      server.closeAllConnections(); // открытые ленты страницы
     },
   };
 }
