@@ -100,7 +100,7 @@ app.whenReady().then(async () => {
   await step('запись: открывается с первого свистка', async () => {
     await click('[data-key="m:102"] .stream[data-play]');
     await until('плеер записи', async () => /oid=-1&id=2&/.test(await frame() || ''));
-    assert.match(await frame(), /&t=10m0s$/);
+    assert.match(await frame(), /&t=10m0s&js_api=1$/); // js_api — плеер сообщает позицию для «В окне»
   });
 
   await step('второе окно плеера открывается рядом с первым', async () => {

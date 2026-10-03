@@ -317,12 +317,22 @@ function streamOf(rowKey, url) {
   return embed ? { m, s, embed } : null;
 }
 
+// На какой секунде запись во встроенном плеере — чтобы окно «В окне» продолжило с того же места.
+// Плеер VK сообщает это сам, если открыт с js_api=1 и получил init. null — запись не запускали.
+let position = null;
+addEventListener('message', (e) => {
+  if (!playerEl || e.source !== playerEl.querySelector('iframe').contentWindow) return;
+  const { state: playback, time } = e.data || {};
+  if (playback && playback !== 'unstarted' && Number.isFinite(time)) position = Math.floor(time);
+});
+
 // url — ссылка эфира; t — с какой секунды открыть запись (первый свисток), без него — как обычно
 function openPlayer(rowKey, url, t = null) {
   const found = streamOf(rowKey, url);
   if (!found) return;
   const { m, s, embed } = found;
-  const src = withTime(embed, t);
+  const src = `${withTime(embed, t)}${s.status === 'finished' ? '&js_api=1' : ''}`;
+  position = null;
   const sameRow = playerEl && opened.player?.rowKey === rowKey;
   opened.play(rowKey, url, t);
 
@@ -345,6 +355,8 @@ function openPlayer(rowKey, url, t = null) {
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock"></iframe></div>
     ${detailsToggleHtml(rowKey, false)}
   </div></div>`;
+  const frame = el.querySelector('iframe');
+  frame.addEventListener('load', () => frame.contentWindow.postMessage({ method: 'init' }, new URL(frame.src).origin));
   el.addEventListener('transitionend', (e) => {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
   });
@@ -387,7 +399,11 @@ function popOut() {
   const found = p && streamOf(p.rowKey, p.url);
   if (!found) return;
   const { m, s, embed } = found;
-  const q = new URLSearchParams({ src: withTime(embed, p.t), url: withTime(s.url, p.t), title: `${matchTitle(m)} · ${s.channel}` });
+  // запись, которую уже смотрели, продолжается в окне с того же места и сразу со звуком
+  // (без mute=0 плеер VK при автозапуске выключает звук)
+  const t = position ?? p.t;
+  const src = `${withTime(embed, t)}${position == null ? '' : '&autoplay=1&mute=0'}`;
+  const q = new URLSearchParams({ src, url: withTime(s.url, t), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   opened.popOut(); // в двух местах сразу один эфир не нужен
   closePlayer();
