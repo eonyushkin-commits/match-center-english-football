@@ -1,5 +1,14 @@
 // Расписание дня: турниры из настроек в заданном порядке, русские названия, привязанные эфиры.
 import { createNamer, matchStreams } from './match.mjs';
+import { expect, isObject } from './shape.mjs';
+
+const okTeam = (t) => isObject(t) && t.id != null && typeof t.name === 'string';
+// проверяем только матчи выбранных турниров: остальные сотни матчей дня приложению не нужны
+function checked(m) {
+  expect(m?.id != null && okTeam(m.home) && okTeam(m.away) && typeof m.status?.utcTime === 'string',
+    'FotMob', `у матча ${m?.id ?? '?'} нет команд или времени начала`);
+  return m;
+}
 
 export function buildDay({ fm, ru, settings, snapshot }) {
   const order = settings.leagues;
@@ -15,7 +24,7 @@ export function buildDay({ fm, ru, settings, snapshot }) {
 
   const leagues = [...parts].filter(([, list]) => list.length).map(([id, list]) => {
     const [lg] = list; // у сезонных этапов lg.id свой (напр. 938218 у Чемпионшипа), логотип — под основным
-    const matches = list.flatMap((part) => part.matches || []).map((m) => ({
+    const matches = list.flatMap((part) => part.matches || []).map(checked).map((m) => ({
       id: m.id,
       utcTime: m.status.utcTime,
       home: team(m.home, ru),
@@ -39,7 +48,7 @@ export function buildDay({ fm, ru, settings, snapshot }) {
     };
   });
 
-  return { leagues, stale: fm.stale || ru.stale || null };
+  return { leagues, stale: fm.stale || ru.stale || null, formatChanged: !!(fm.formatChanged || ru.formatChanged) };
 }
 
 const team = (t, ru) => ({ id: t.id, name: ru.Participants?.[t.id] || t.name, score: t.score ?? null });

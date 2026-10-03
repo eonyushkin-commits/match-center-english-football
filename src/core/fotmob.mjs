@@ -1,14 +1,20 @@
 // Расписание FotMob. Одинаковые запросы, пришедшие одновременно, объединяются; при сбое сети
-// отдаются последние полученные данные с пометкой stale, а не ошибка.
+// отдаются последние полученные данные с пометкой stale, а не ошибка. Форма каждого ответа
+// проверяется на входе: см. shape.mjs.
+import { FormatError, expect, isObject } from './shape.mjs';
+
 const MAX_ENTRIES = 40;
+const need = (ok, what) => expect(ok, 'FotMob', what);
 
 export function createFotmob(fetchImpl = fetch) {
   const cache = new Map(); // key → { t, v } | { pending }
 
-  async function getJson(url) {
+  // check(j) проверяет форму ответа и может вернуть исправленный ответ
+  async function getJson(url, check) {
     const r = await fetchImpl(url, { signal: AbortSignal.timeout(15e3) });
     if (!r.ok) throw new Error(`FotMob ответил ${r.status}`);
-    return r.json();
+    const j = await r.json();
+    return check(j) ?? j;
   }
 
   function cached(key, ttlMs, load) {
@@ -25,7 +31,7 @@ export function createFotmob(fetchImpl = fetch) {
       (e) => {
         if (hit) {
           cache.set(key, hit);
-          return { ...hit.v, stale: e.message };
+          return { ...hit.v, stale: e.message, formatChanged: e instanceof FormatError };
         }
         cache.delete(key);
         throw e;
@@ -36,12 +42,21 @@ export function createFotmob(fetchImpl = fetch) {
   }
 
   return {
-    names: () => cached('ru', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/translationmapping?locale=ru')),
+    names: () => cached('ru', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/translationmapping?locale=ru',
+      (j) => need(isObject(j?.Participants), 'в названиях нет словаря Participants'))),
     day: (date, tz) => cached(`day:${date}:${tz}`, 45e3, () =>
-      getJson(`https://www.fotmob.com/api/data/matches?date=${date}&timezone=${encodeURIComponent(tz)}`)),
+      getJson(`https://www.fotmob.com/api/data/matches?date=${date}&timezone=${encodeURIComponent(tz)}`, (j) => {
+        if (j === null) return { leagues: [] }; // так FotMob отвечает на день за пределами своего расписания
+        return need(Array.isArray(j?.leagues), 'в расписании нет списка leagues');
+      })),
     // все турниры с русскими названиями — для турниров, добавленных в настройках по номеру
-    leagues: () => cached('leagues', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/data/allLeagues?locale=ru')),
-    // подробности матча кэширует и задерживает details.mjs
-    match: (id) => getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${encodeURIComponent(id)}`),
+    leagues: () => cached('leagues', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/data/allLeagues?locale=ru',
+      (j) => need(Array.isArray(j?.countries) && Array.isArray(j?.international), 'в справочнике турниров нет списков countries и international'))),
+    // подробности матча кэширует details.mjs
+    match: (id) => getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${encodeURIComponent(id)}`, (j) => {
+      need(isObject(j?.header?.status), 'у матча нет header.status');
+      const events = j.content?.matchFacts?.events;
+      need(events == null || Array.isArray(events.events), 'события матча — не список');
+    }),
   };
 }

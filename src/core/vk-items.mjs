@@ -1,5 +1,8 @@
 // Разбор видео VK в эфиры матч-центра — общий для API и для чтения страницы канала.
 import { parseTeams } from './match.mjs';
+import { expect, isObject } from './shape.mjs';
+
+const known = (v) => isObject(v) && Number.isFinite(v.owner_id) && Number.isFinite(v.id) && typeof v.title === 'string';
 
 // live_status из ответов vkvideo.ru → наши статусы
 function status(s) {
@@ -10,6 +13,8 @@ function status(s) {
 }
 
 export function toItems(videos, ch) {
+  // обычные видео без live_status — норма, а вот ни одного видео с номером и названием — нет
+  expect(!videos.length || videos.some(known), 'VK', 'у видео нет owner_id, id или title');
   // одно видео может прийти несколько раз (повторные запросы страницы) — берём последнюю версию
   const unique = new Map(videos.map((v) => [`${v.owner_id}_${v.id}`, v]));
   return [...unique.values()]

@@ -136,7 +136,8 @@ export function updateHtml(u) {
 export function notices({ error, day, status, saveError, update: u, updateDismissed }) {
   const out = [];
   if (error && day) out.push(['bad', `<b>Не удалось обновить расписание:</b> ${esc(error)}. Показаны последние данные.`]);
-  if (day?.stale) out.push(['', '<b>FotMob сейчас недоступен</b> — показано расписание, полученное ранее.']);
+  if (day?.formatChanged) out.push(['bad', `<b>${esc(day.stale)}.</b> Показано расписание, полученное ранее.`]);
+  else if (day?.stale) out.push(['', '<b>FotMob сейчас недоступен</b> — показано расписание, полученное ранее.']);
   for (const w of status?.warnings || []) out.push(['bad', esc(w)]);
   const vk = status?.vk;
   if (vk?.ready && vk.channels.length && vk.channels.every((c) => c.ok === false))
