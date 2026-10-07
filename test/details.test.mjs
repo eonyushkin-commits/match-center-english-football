@@ -48,7 +48,6 @@ test('идущий матч — сразу свежие события, FotMob �
 
   const first = await get('1');
   assert.equal(first.state, 'live');
-  assert.equal(first.kickoff, Date.parse('2026-09-19T11:31:12Z'));
 
   f.goal(); // гол забили через 5 секунд после открытия
   now = 10e3;

@@ -51,13 +51,6 @@ export function embedUrl(s) {
   }
 }
 
-// Секунда записи, на которой момент at; null — это не запись или она его не застала
-export function recordSecond(s, at) {
-  if (s.status !== 'finished' || !s.time || at == null) return null;
-  const sec = Math.floor((at - s.time) / 1000);
-  return sec >= 0 && !(s.duration && sec >= s.duration) ? sec : null;
-}
-
 // ссылка VK с началом воспроизведения: …&t=20m14s — так понимают и плеер, и сайт
 export const withTime = (url, sec) => (sec == null ? url : `${url}${url.includes('?') ? '&' : '?'}t=${Math.floor(sec / 60)}m${sec % 60}s`);
 

@@ -26,7 +26,7 @@ export async function createMatchCenter({ dataDir, fetchImpl = fetch, pageReader
 
   const feed = createFeed({ settings, poller, fotmob, details, version });
 
-  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, details, feed }));
+  const { server, url } = await startServer(createHandler({ settings, poller, fotmob, feed }));
   poller.refresh();
 
   return {

@@ -36,7 +36,7 @@ before(async () => {
   const fotmob = { day: async () => fm, names: async () => ru, leagues: async () => allLeagues };
   const details = async (id) => ({ state: 'live', events: [], id });
   const feed = createFeed({ settings, poller, fotmob, details, version: 'test' });
-  const handler = createHandler({ settings, poller, fotmob, details, feed });
+  const handler = createHandler({ settings, poller, fotmob, feed });
   ({ server: srv, url: base } = await startServer(handler));
 });
 after(() => srv.close());

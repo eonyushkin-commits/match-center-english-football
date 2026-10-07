@@ -7,30 +7,6 @@ const MAX_MATCHES = 30;
 // «45+4»: timeStr у FotMob уже содержит добавленное время («45 + 4»), поэтому собираем из чисел
 const minute = (e) => (e.time != null ? `${e.time}${e.overloadTime ? `+${e.overloadTime}` : ''}` : String(e.timeStr ?? ''));
 
-// Время начала таймов FotMob отдаёт строкой «19.09.2026 13:31:12» по центральноевропейскому
-// времени (зимой UTC+1, летом UTC+2), в каком бы поясе ни спрашивали
-const FOTMOB_TZ = 'Europe/Oslo';
-const tzParts = new Intl.DateTimeFormat('en-US', { timeZone: FOTMOB_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
-const tzOffset = (ms) => {
-  const p = Object.fromEntries(tzParts.formatToParts(ms).map((x) => [x.type, Number(x.value)]));
-  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
-};
-export function fotmobTime(s) {
-  const m = /^(\d\d)\.(\d\d)\.(\d{4}) (\d\d):(\d\d):(\d\d)$/.exec(s || '');
-  if (!m) return null;
-  const wall = Date.UTC(m[3], m[2] - 1, m[1], m[4], m[5], m[6]);
-  return wall - tzOffset(wall - tzOffset(wall)); // второй шаг — на случай перехода на летнее время
-}
-
-// Фактическое начало матча (первый свисток) в мс UTC или null. Время дальше 4 часов от начала
-// по расписанию не берём: значит, FotMob сменил формат, и лучше запись с начала, чем мимо.
-export function parseKickoff(raw) {
-  const st = raw?.header?.status;
-  const planned = Date.parse(st?.utcTime);
-  const t = fotmobTime(st?.halfs?.firstHalfStarted);
-  return t && (!planned || Math.abs(t - planned) < 4 * 3600e3) ? t : null;
-}
-
 const side = (e) => (e.isHome ? 'home' : 'away');
 const assist = (s) => (s ? String(s).replace(/^assist by\s+/i, '') : null);
 
@@ -72,7 +48,7 @@ export function parseLineups(raw) {
 function summarize(raw) {
   const st = raw?.header?.status || {};
   const state = st.finished ? 'finished' : st.started ? 'live' : 'upcoming';
-  return { state, events: parseEvents(raw), lineups: parseLineups(raw), kickoff: parseKickoff(raw) };
+  return { state, events: parseEvents(raw), lineups: parseLineups(raw) };
 }
 
 export function createDetails({ fotmob, now = () => Date.now() }) {

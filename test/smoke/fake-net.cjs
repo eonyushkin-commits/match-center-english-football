@@ -1,7 +1,7 @@
 // Подставная сеть для проверок в приложении: FotMob и VK отвечают заранее известным днём,
 // привязанным к текущему времени. Три матча Премьер-лиги:
 //   101 — идёт, два эфира на разных каналах;
-//   102 — завершён, запись началась за 10 минут до первого свистка;
+//   102 — завершён, есть запись;
 //   103 — начнётся через два часа, эфиров нет.
 const details = require('../fixtures/fotmob-match-5795461.json');
 
@@ -25,12 +25,9 @@ function create(now = Date.now()) {
   };
   const leagues = { international: [], countries: [{ ccode: 'RUS', localizedName: 'Россия', leagues: [{ id: 338, localizedName: 'ФНЛ' }] }] };
 
-  // время начала таймов FotMob пишет по времени Осло
-  const oslo = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Oslo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
-  const osloTime = (ms) => oslo.format(ms).replace(',', '');
   const matchDetails = (id) => {
     const st = day.leagues[0].matches.find((m) => m.id === id)?.status;
-    return { ...details, header: { status: { utcTime: st?.utcTime, started: !!st?.started, finished: !!st?.finished, halfs: st?.started ? { firstHalfStarted: osloTime(kickoff[id]) } : {} } } };
+    return { ...details, header: { status: { utcTime: st?.utcTime, started: !!st?.started, finished: !!st?.finished } } };
   };
 
   const sec = (ms) => Math.floor(ms / 1000);

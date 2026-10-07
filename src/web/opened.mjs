@@ -4,7 +4,7 @@
 export const matchIdOf = (rowKey) => Number(rowKey.split(':')[1]);
 
 export function createOpened() {
-  let player = null; // { rowKey, url, t } — t: с какой секунды открыта запись
+  let player = null; // { rowKey, url }
   let details = null; // { rowKey, data, error, subsOpen }
   const popped = new Set(); // строки матчей, отправленных «В окно»
 
@@ -13,8 +13,8 @@ export function createOpened() {
     get details() { return details; },
 
     // встроенный плеер один; у строки с ним своя кнопка «События и составы»
-    play(rowKey, url, t = null) {
-      player = { rowKey, url, t };
+    play(rowKey, url) {
+      player = { rowKey, url };
       popped.delete(rowKey);
     },
     stop() {

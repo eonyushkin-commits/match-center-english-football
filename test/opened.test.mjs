@@ -10,8 +10,8 @@ test('matchIdOf: номер матча из ключа строки', () => {
 test('плеер один: новый эфир заменяет прежний, эфир узнаётся по ссылке', () => {
   const o = createOpened();
   o.play('live:1', 'a');
-  o.play('m:2', 'b', 600);
-  assert.deepEqual(o.player, { rowKey: 'm:2', url: 'b', t: 600 });
+  o.play('m:2', 'b');
+  assert.deepEqual(o.player, { rowKey: 'm:2', url: 'b' });
   assert.equal(o.isPlaying('m:2', 'b'), true);
   assert.equal(o.isPlaying('m:2', 'a'), false);
   assert.equal(o.isPlaying('live:1', 'a'), false);

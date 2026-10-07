@@ -3,7 +3,7 @@
 // они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
-import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, recordSecond, withTime, ymd } from './format.mjs';
+import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, withTime, ymd } from './format.mjs';
 import { createOpened, matchIdOf } from './opened.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
 import { detailsHtml, detailsToggleHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
@@ -84,7 +84,6 @@ function subscribe() {
     if (!d) return;
     d.data = details;
     d.error = null;
-    if (details.kickoff) kickoffs.set(matchIdOf(d.rowKey), details.kickoff);
     renderList();
   }));
   es.addEventListener('details-error', data(({ message }) => {
@@ -287,19 +286,6 @@ function toggleDetails(rowKey) {
   subscribe(); // события матча приходят лентой, пока они раскрыты
 }
 
-// Фактическое начало матча (из подробностей) — чтобы открывать записи сразу на свистке.
-// Запоминаем только найденное: нет ответа или времени — откроем запись с начала, а спросим в следующий раз.
-const kickoffs = new Map(); // id матча → время первого свистка, мс
-async function kickoffOf(id) {
-  if (!kickoffs.has(id)) {
-    try {
-      const at = (await request('GET', `/api/match?id=${id}`)).kickoff;
-      if (at) kickoffs.set(id, at);
-    } catch {}
-  }
-  return kickoffs.get(id) ?? null;
-}
-
 // ---------- панель каналов ----------
 function renderPopover() {
   $('#status-pop').innerHTML = popoverHtml(state.status?.vk, state.settings?.refreshSeconds);
@@ -339,20 +325,20 @@ addEventListener('message', (e) => {
   if (playback && playback !== 'unstarted' && Number.isFinite(time)) position = Math.floor(time);
 });
 
-// url — ссылка эфира; t — с какой секунды открыть запись (первый свисток), без него — как обычно
-function openPlayer(rowKey, url, t = null) {
+// url — ссылка эфира
+function openPlayer(rowKey, url) {
   const found = streamOf(rowKey, url);
   if (!found) return;
   const { m, s, embed } = found;
-  const src = `${withTime(embed, t)}${s.status === 'finished' ? '&js_api=1' : ''}`;
+  const src = `${embed}${s.status === 'finished' ? '&js_api=1' : ''}`;
   position = null;
   const sameRow = playerEl && opened.player?.rowKey === rowKey;
-  opened.play(rowKey, url, t);
+  opened.play(rowKey, url);
 
   // тот же матч — переключаем канал без анимации
   if (sameRow) {
     playerEl.querySelector('iframe').src = src;
-    playerEl.querySelector('.ext').href = withTime(s.url, t);
+    playerEl.querySelector('.ext').href = s.url;
     render();
     return;
   }
@@ -362,7 +348,7 @@ function openPlayer(rowKey, url, t = null) {
   el.className = 'player';
   el.innerHTML = `<div class="clip"><div class="inner">
     <div class="phead"><b>${esc(matchTitle(m))}</b>
-      <a class="ext" href="${esc(withTime(s.url, t))}" target="_blank" rel="noopener">Открыть в VK ↗</a>
+      <a class="ext" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть в VK ↗</a>
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock"></iframe></div>
@@ -414,9 +400,8 @@ function popOut() {
   const { m, s, embed } = found;
   // запись, которую уже смотрели, продолжается в окне с того же места и сразу со звуком
   // (без mute=0 плеер VK при автозапуске выключает звук)
-  const t = position ?? p.t;
-  const src = `${withTime(embed, t)}${position == null ? '' : '&autoplay=1&mute=0'}`;
-  const q = new URLSearchParams({ src, url: withTime(s.url, t), title: `${matchTitle(m)} · ${s.channel}` });
+  const src = `${withTime(embed, position)}${position == null ? '' : '&autoplay=1&mute=0'}`;
+  const q = new URLSearchParams({ src, url: withTime(s.url, position), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   opened.popOut(); // в двух местах сразу один эфир не нужен
   closePlayer();
@@ -533,13 +518,11 @@ $('#list').addEventListener('click', (e) => {
   const rowKey = a.closest('[data-key]').dataset.key;
   const found = streamOf(rowKey, a.getAttribute('href'));
   if (!found) return; // встроить нельзя — откроется ссылкой в браузере
-  const { m, s } = found;
+  const { s } = found;
   e.preventDefault();
   // повторный клик по открытому эфиру закрывает плеер
   if (opened.isPlaying(rowKey, s.url)) { closePlayer(); return; }
-  if (s.status !== 'finished') { openPlayer(rowKey, s.url); return; }
-  // запись — на первом свистке, запуск по кнопке плеера; эфир, начатый после свистка, — с начала
-  kickoffOf(m.id).then((at) => openPlayer(rowKey, s.url, recordSecond(s, at)));
+  openPlayer(rowKey, s.url);
 });
 
 // «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.

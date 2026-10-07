@@ -57,9 +57,7 @@ function validTimeZone(tz) {
   }
 }
 
-const MATCH_ID = /^\d{1,12}$/;
-
-export function createHandler({ settings, poller, fotmob, details, feed }) {
+export function createHandler({ settings, poller, fotmob, feed }) {
   const withLeagues = (s) => ({ ...s, knownLeagues: defaults.knownLeagues });
 
   // Лента (Server-Sent Events): расписание дня date, состояние каналов и, если задан match,
@@ -70,17 +68,12 @@ export function createHandler({ settings, poller, fotmob, details, feed }) {
     const matchId = u.searchParams.get('match');
     if (!/^\d{8}$/.test(date)) throw new HttpError(400, 'date: нужен формат ГГГГММДД');
     if (!validTimeZone(tz)) throw new HttpError(400, 'tz: неизвестный часовой пояс');
-    if (matchId !== null && !MATCH_ID.test(matchId)) throw new HttpError(400, 'match: нужен номер матча FotMob');
+    if (matchId !== null && !/^\d{1,12}$/.test(matchId)) throw new HttpError(400, 'match: нужен номер матча FotMob');
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.on('close', feed.subscribe({ date, tz, matchId }, (event, json) => res.write(`event: ${event}\ndata: ${json}\n\n`)));
   }
 
   const routes = {
-    'GET /api/match': (u) => {
-      const id = u.searchParams.get('id') || '';
-      if (!MATCH_ID.test(id)) throw new HttpError(400, 'id: нужен номер матча FotMob');
-      return details(id);
-    },
     'GET /api/settings': () => withLeagues(settings.get()),
     // русские названия всех турниров FotMob: { id: «Россия · ФНЛ» }, у международных — без страны
     'GET /api/leagues': async () => {
