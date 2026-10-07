@@ -39,6 +39,17 @@ test('FotMob сменил формат после удачного ответа 
   assert.match(notices({ day: built })[0][1], /FotMob изменил формат ответа.*Показано расписание, полученное ранее/);
 });
 
+test('FotMob: refresh — расписание спрашивается заново, не дожидаясь срока кэша', async () => {
+  let calls = 0;
+  const f = createFotmob(async () => { calls++; return new Response(JSON.stringify({ leagues: [] })); });
+  await f.day('20260920', 'UTC');
+  await f.day('20260920', 'UTC');
+  assert.equal(calls, 1, 'второй раз — из кэша');
+  f.refresh();
+  await f.day('20260920', 'UTC');
+  assert.equal(calls, 2);
+});
+
 test('buildDay: матч выбранного турнира без команд — ошибка формата; чужие турниры не проверяются', () => {
   const ok = { id: 1, home: { id: 1, name: 'A' }, away: { id: 2, name: 'B' }, status: { utcTime: '2026-09-20T15:00:00Z' } };
   const build = (leagues) => buildDay({ fm: { leagues }, ru: {}, settings: resolve({}), snapshot: { streams: [] } });

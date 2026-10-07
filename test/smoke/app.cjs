@@ -12,7 +12,8 @@ const save = (extra = {}) => fs.writeFileSync(OUT, JSON.stringify({ results, ...
 
 const external = []; // что приложение хотело открыть в браузере
 shell.openExternal = async (url) => { external.push(url); };
-net.fetch = fakeNet();
+const fake = fakeNet();
+net.fetch = fake;
 // окно, закрытое другими окнами, Chromium считает скрытым — проверкам это мешает
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // турнир, добавленный по номеру; подсказку про трей не показываем — это настоящее уведомление Windows
@@ -47,7 +48,7 @@ app.whenReady().then(async () => {
   let win;
   await until('главное окно', () => (win = BrowserWindow.getAllWindows()[0]) && !win.webContents.isLoading() && win.webContents.getURL().startsWith('http'));
   const page = (code) => js(win, code);
-  const on = (code, what) => until(what || code, () => page(code));
+  const on = (code, what, ms) => until(what || code, () => page(code), ms);
   const click = (selector) => page(`document.querySelector(${JSON.stringify(selector)}).click(), true`);
   const players = () => BrowserWindow.getAllWindows().filter((w) => w !== win);
   const frame = (w = win) => js(w, `document.querySelector('iframe')?.src ?? null`);
@@ -68,6 +69,25 @@ app.whenReady().then(async () => {
     await on(`!!document.querySelector('[data-key="m:101"] .stream[data-play]')`, 'эфиры у матча');
     assert.ok(await page(`!!document.querySelector('[data-key="live"] [data-key="live:101"]')`));
     assert.equal(await page(`document.querySelector('[data-key="m:101"] .name').textContent`), 'Арсенал');
+  });
+
+  // каналы перечитываются раз в минуту, так что за несколько секунд новый эфир покажет только кнопка
+  const streamsOf103 = (n) => on(`document.querySelectorAll('[data-key="m:103"] .stream[data-play]').length === ${n}`, `эфиров у матча 103: ${n}`, 6000);
+
+  await step('«Обновить сейчас» в панели каналов: новый эфир появляется сразу', async () => {
+    fake.addStream('englishaccent', 1);
+    await click('#status');
+    await click('[data-action="refresh-vk"]');
+    await streamsOf103(1);
+    await on(`document.querySelector('[data-action="refresh-vk"]').disabled === false`, 'кнопка снова доступна');
+    await click('#status');
+  });
+
+  await step('кнопка ↻: каналы перечитываются, новый эфир появляется сразу', async () => {
+    fake.addStream('pl_forever', 2);
+    await click('#refresh');
+    await streamsOf103(2);
+    await on(`!document.querySelector('#refresh').classList.contains('spin')`, 'значок перестал крутиться');
   });
 
   await step('идущий эфир: плеер в строке матча, события под ним', async () => {

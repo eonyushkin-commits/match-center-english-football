@@ -70,6 +70,7 @@ function subscribe() {
 
   es.addEventListener('status', data((status) => {
     state.status = status;
+    $('#refresh').classList.remove('spin'); // каналы перечитаны (см. refreshNow)
     renderStatus();
     renderNotices();
   }));
@@ -99,6 +100,18 @@ function subscribe() {
     setTimeout(() => { if (feed === es) subscribe(); }, 3000);
   };
   return mine.promise;
+}
+
+// «Обновить» по кнопке или клавише R: приложение сразу перечитывает каналы VK и расписание,
+// а новое присылает лентой. Лента оборвалась — заодно открываем её заново.
+function refreshNow() {
+  $('#refresh').classList.add('spin');
+  if (!feed || feed.readyState === EventSource.CLOSED) subscribe();
+  request('POST', '/api/refresh').catch((e) => {
+    $('#refresh').classList.remove('spin');
+    state.error = e.message;
+    render();
+  });
 }
 
 function unsubscribe() {
@@ -480,7 +493,7 @@ $('#spoilers').addEventListener('click', () => {
   render();
 });
 $('#q').addEventListener('input', (e) => { state.q = e.target.value; if (state.settings) renderList(); });
-$('#refresh').addEventListener('click', subscribe);
+$('#refresh').addEventListener('click', refreshNow);
 $('#open-settings').addEventListener('click', openSettings);
 $('#status').addEventListener('click', (e) => { e.stopPropagation(); togglePopover(); });
 $('#theme').addEventListener('click', () => {
@@ -550,8 +563,8 @@ document.addEventListener('click', (e) => {
     e.stopPropagation();
     togglePopover(true);
   } else if (act === 'refresh-vk') {
-    e.target.disabled = true;
-    request('POST', '/api/refresh').catch(() => {}); // новое состояние каналов пришлёт лента
+    e.target.disabled = true; // панель перерисуется, когда лента пришлёт новое состояние каналов
+    refreshNow();
   } else if (act === 'update-download') {
     window.mc?.downloadUpdate();
   } else if (act === 'update-install') {
@@ -577,7 +590,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     $('#q').focus();
   } else if (e.code === 'KeyR') {
-    subscribe();
+    refreshNow();
   } else if (e.key === ',') {
     openSettings();
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {

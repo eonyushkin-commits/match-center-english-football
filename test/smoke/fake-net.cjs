@@ -47,7 +47,13 @@ function create(now = Date.now()) {
   const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
   let tokenAsked = false;
 
-  return async function fetch(url, init = {}) {
+  // канал завёл эфир к матчу 103 уже после запуска приложения
+  fetch.addStream = (channel, owner) => {
+    (videos[channel] ||= []).push(video(owner, 3, 'Фулхэм — Брентфорд | АПЛ', { live_status: 'upcoming', date: sec(kickoff[103]) }));
+  };
+  return fetch;
+
+  async function fetch(url, init = {}) {
     const u = new URL(String(url));
     if (u.hostname === 'www.fotmob.com') {
       if (u.pathname === '/api/translationmapping') return json(names);

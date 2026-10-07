@@ -4,10 +4,11 @@ export const norm = (s) => String(s ?? '')
 
 // Команды ищем в любой части заголовка между «|»: у каналов бывает и
 // «Брайтон — Арсенал | АПЛ 5 тур», и «Смотреть онлайн АПЛ | 5 тур | Брайтон – Арсенал».
+// Между командами — тире, дефис, vs, «против» или отдельная буква x (латинская, русская, ×).
 // Лишние слова перед командами («Смотреть онлайн Чемпионшип …») отсекает nameScore.
 export function parseTeams(title) {
   for (const seg of String(title ?? '').split('|')) {
-    const parts = seg.split(/\s+(?:—|–|-|vs\.?|против)\s+/i);
+    const parts = seg.split(/\s+(?:—|–|-|vs\.?|против|x|х|×)\s+/i);
     if (parts.length !== 2) continue;
     const teams = parts.map((p) => norm(p.replace(/\(.*?\)|\d+\s*:\s*\d+/g, '')));
     if (teams.every(Boolean)) return teams;

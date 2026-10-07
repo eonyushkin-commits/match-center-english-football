@@ -96,7 +96,10 @@ export function createHandler({ settings, poller, fotmob, details, feed }) {
     },
     'PUT /api/settings': async (u, req) => withLeagues(await settings.update(await readJson(req))),
     'POST /api/refresh': () => {
-      poller.retry(); // по кнопке — заодно без пауз запасного чтения
+      // по кнопке: расписание и каналы перечитываются сразу (каналы — без пауз запасного чтения);
+      // когда каналы прочитаны, лента присылает странице новое расписание
+      fotmob.refresh();
+      poller.retry();
       return { ok: true };
     },
   };

@@ -58,5 +58,10 @@ export function createFotmob(fetchImpl = fetch) {
       const events = j.content?.matchFacts?.events;
       need(events == null || Array.isArray(events.events), 'события матча — не список');
     }),
+    // «Обновить» по кнопке: расписание спросим заново, не дожидаясь срока. Полученное раньше
+    // остаётся — его покажем, если FotMob не ответит.
+    refresh() {
+      for (const [key, hit] of cache) if (key.startsWith('day:')) hit.t = 0;
+    },
   };
 }
