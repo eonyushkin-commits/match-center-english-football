@@ -174,6 +174,7 @@ const sections = () => buildSections({
   isToday: state.date === state.today,
   filters: state.settings.ui.filters,
   q: state.q,
+  byTime: state.settings.ui.leaguesByTime,
   // матч с открытым плеером или подробностями не прячем никакими фильтрами
   pinned: opened.pinned(),
 });
@@ -212,6 +213,10 @@ function renderFilters() {
   const hide = !!state.settings?.ui.hideScores;
   $('#spoilers').classList.toggle('on', hide);
   $('#spoilers').setAttribute('aria-pressed', String(hide));
+  const byTime = !!state.settings?.ui.leaguesByTime;
+  $('#by-time').classList.toggle('on', byTime);
+  $('#by-time').setAttribute('aria-pressed', String(byTime));
+  $('#by-time').title = `Турниры: ${byTime ? 'по времени начала' : 'в порядке списка'}`;
 }
 
 function renderStatus() {
@@ -481,6 +486,12 @@ $('#q').addEventListener('input', (e) => { state.q = e.target.value; if (state.s
 $('#refresh').addEventListener('click', refreshNow);
 $('#open-settings').addEventListener('click', openSettings);
 $('#status').addEventListener('click', (e) => { e.stopPropagation(); togglePopover(); });
+$('#by-time').addEventListener('click', () => {
+  if (!state.settings) return;
+  state.settings.ui.leaguesByTime = !state.settings.ui.leaguesByTime;
+  saveUi({ leaguesByTime: state.settings.ui.leaguesByTime });
+  render();
+});
 $('#theme').addEventListener('click', () => {
   if (!state.settings) return;
   const order = ['system', 'light', 'dark'];
@@ -545,9 +556,6 @@ document.addEventListener('click', (e) => {
   } else if (act === 'status') {
     e.stopPropagation();
     togglePopover(true);
-  } else if (act === 'refresh-vk') {
-    e.target.disabled = true; // панель перерисуется, когда лента пришлёт новое состояние каналов
-    refreshNow();
   } else if (act === 'update-download') {
     window.mc?.downloadUpdate();
   } else if (act === 'update-install') {

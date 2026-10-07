@@ -74,16 +74,8 @@ app.whenReady().then(async () => {
   // каналы перечитываются раз в минуту, так что за несколько секунд новый эфир покажет только кнопка
   const streamsOf103 = (n) => on(`document.querySelectorAll('[data-key="m:103"] .stream[data-play]').length === ${n}`, `эфиров у матча 103: ${n}`, 6000);
 
-  await step('«Обновить сейчас» в панели каналов: новый эфир появляется сразу', async () => {
-    fake.addStream('englishaccent', 1);
-    await click('#status');
-    await click('[data-action="refresh-vk"]');
-    await streamsOf103(1);
-    await on(`document.querySelector('[data-action="refresh-vk"]').disabled === false`, 'кнопка снова доступна');
-    await click('#status');
-  });
-
   await step('кнопка ↻: каналы перечитываются, новый эфир появляется сразу', async () => {
+    fake.addStream('englishaccent', 1);
     fake.addStream('pl_forever', 2);
     await click('#refresh');
     await streamsOf103(2);

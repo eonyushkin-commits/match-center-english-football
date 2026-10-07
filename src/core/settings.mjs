@@ -59,6 +59,7 @@ export function resolve(user = {}) {
       theme: THEMES.includes(ui.theme) ? ui.theme : 'system',
       filters: Object.fromEntries(FILTERS.map((f) => [f, !!ui.filters?.[f]])),
       hideScores: !!ui.hideScores, // режим без спойлеров
+      leaguesByTime: !!ui.leaguesByTime, // турниры по времени первого матча, а не в порядке списка
       trayHintShown: !!ui.trayHintShown,
       window: ui.window && typeof ui.window === 'object' ? ui.window : null,
     },
@@ -146,7 +147,7 @@ export function applyPatch(user, patch) {
     const ui = { ...(user.ui || {}) };
     if (THEMES.includes(patch.ui.theme)) ui.theme = patch.ui.theme;
     if (patch.ui.filters) ui.filters = Object.fromEntries(FILTERS.map((f) => [f, !!patch.ui.filters[f]]));
-    for (const key of ['hideScores', 'trayHintShown'])
+    for (const key of ['hideScores', 'leaguesByTime', 'trayHintShown'])
       if (patch.ui[key] !== undefined) ui[key] = !!patch.ui[key];
     if (patch.ui.window && typeof patch.ui.window === 'object') {
       const { x, y, width, height, maximized } = patch.ui.window;

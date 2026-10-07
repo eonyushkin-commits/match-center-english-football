@@ -17,7 +17,8 @@ export function markFavorites(day, settings) {
 
 // Разделы списка: «Сейчас в эфире» (только сегодня) и турниры.
 // pinned — ключи строк с открытым плеером или подробностями: их не прячет никакой фильтр.
-export function sections({ day, isToday, filters: f, q, pinned }) {
+// byTime — турниры идут по началу первого показанного матча, а не в порядке из настроек.
+export function sections({ day, isToday, filters: f, q, pinned, byTime }) {
   q = q.trim().toLowerCase();
   const hit = (m, lg) => (!f.streams || m.streams.length) && (!f.live || isLive(m)) && (!f.favorites || m.favorite)
     && (!q || `${lg.name} ${lg.country}`.toLowerCase().includes(q) || `${m.home.name} ${m.away.name}`.toLowerCase().includes(q));
@@ -31,9 +32,14 @@ export function sections({ day, isToday, filters: f, q, pinned }) {
     if (pinned.has(key) || (liveBlock && isLive(m) && m.streams.some((s) => s.status === 'started') && hit(m, lg))) live.push({ key, m, lg, showLeague: true });
   }
   if (live.length) out.push({ key: 'live', live: true, rows: live });
+  const leagues = [];
   for (const lg of day.leagues) {
     const rows = lg.matches.filter((m) => pinned.has(`m:${m.id}`) || hit(m, lg)).map((m) => ({ key: `m:${m.id}`, m, lg }));
-    if (rows.length) out.push({ key: `lg:${lg.id}`, lg, rows });
+    if (rows.length) leagues.push({ key: `lg:${lg.id}`, lg, rows });
   }
-  return out;
+  // матчи турнира остаются вместе; при равном времени — порядок из настроек
+  if (byTime) leagues.sort((a, b) => firstStart(a) - firstStart(b));
+  return [...out, ...leagues];
 }
+
+const firstStart = (s) => Math.min(...s.rows.map((r) => Date.parse(r.m.utcTime)));

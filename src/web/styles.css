@@ -50,6 +50,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   border: 1px solid var(--line); background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); }
 .icon-btn { width: 34px; padding: 0; }
 .icon-btn:hover, .status:hover { border-color: var(--line-strong); }
+.icon-btn.on { background: var(--text); border-color: var(--text); color: var(--bg); }
 .icon-btn .fill { fill: currentColor; stroke: none; }
 .icon-btn.spin svg { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }

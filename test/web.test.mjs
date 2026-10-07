@@ -114,6 +114,20 @@ test('sections: строка с открытым плеером не пряче�
   assert.deepEqual(pick({ filters: { ...NO, favorites: true }, pinned: new Set(['m:4', 'live:1']) }), ['live=1', 'lg:47=3', 'lg:132=4']);
 });
 
+test('sections: по времени начала — турниры по первому показанному матчу, матчи турнира вместе', () => {
+  const at = (id, hh) => match({ id, utcTime: `2026-09-20T${hh}:00:00Z` });
+  const d = { leagues: [
+    { id: 47, name: 'Премьер-лига', country: 'Англия', matches: [at(1, 14), at(2, 16)] },
+    { id: 48, name: 'Чемпионшип', country: 'Англия', matches: [at(3, 12), at(4, 15)] },
+    { id: 132, name: 'Кубок Англии', country: 'Англия', matches: [at(5, 14)] },
+  ] };
+  const of = (o) => keys(sections({ day: d, isToday: false, filters: NO, q: '', pinned: new Set(), ...o }));
+  assert.deepEqual(of({}), ['lg:47=1,2', 'lg:48=3,4', 'lg:132=5']);
+  assert.deepEqual(of({ byTime: true }), ['lg:48=3,4', 'lg:47=1,2', 'lg:132=5'], 'при равном времени — порядок из настроек');
+  d.leagues[0].matches[0].favorite =d.leagues[1].matches[1].favorite = true;
+  assert.deepEqual(of({ byTime: true, filters: { ...NO, favorites: true } }), ['lg:47=1', 'lg:48=4'], 'скрытый фильтром матч на порядок не влияет');
+});
+
 // ---------- view: строка матча ----------
 test('rowHtml: статус FotMob как есть, у будущего — время и колокольчик', () => {
   assert.match(row(match({ finished: true, reason: 'AET' })), /<div class="when">AET/);

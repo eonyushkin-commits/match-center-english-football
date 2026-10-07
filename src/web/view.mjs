@@ -164,6 +164,5 @@ export function popoverHtml(vk, refreshSeconds) {
     return `<div class="chan"><span class="dot ${cls}"></span><b>${esc(c.label)}</b><span class="n">${c.count} эфиров</span><small>${how}${c.ok === null ? '' : when}</small></div>`;
   }).join('');
   return `<h4>Каналы VK</h4>${rows || '<div class="empty">Каналов нет — добавьте их в настройках</div>'}
-    <div class="actions"><span>Обновляются раз в ${refreshSeconds ?? 60} с</span>
-    <button type="button" class="btn" data-action="refresh-vk">Обновить сейчас</button></div>`;
+    <div class="actions"><span>Обновляются раз в ${refreshSeconds ?? 60} с</span></div>`;
 }

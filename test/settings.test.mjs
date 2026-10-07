@@ -84,6 +84,8 @@ test('трей, автозапуск и режим без спойлеров', (
   const r = resolve(user);
   assert.deepEqual([r.tray, r.autostart, r.ui.hideScores], [false, true, true]);
   assert.equal(resolve(applyPatch(user, { ui: { theme: 'dark' } })).ui.hideScores, true, 'другие правки интерфейса его не сбрасывают');
+  assert.equal(s.ui.leaguesByTime, false, 'по умолчанию турниры в порядке списка');
+  assert.equal(resolve(applyPatch(user, { ui: { leaguesByTime: true } })).ui.leaguesByTime, true);
 });
 
 test('отмеченные матчи хранятся до суток после начала', () => {
