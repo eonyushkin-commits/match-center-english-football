@@ -5,6 +5,7 @@ const {
 } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { dataDir } = require('./data-dir.cjs');
 
 const APP_ID = 'ru.sportcenter.matchcenter';
 const TITLE = 'Матч-центр | Английский футбол';
@@ -32,9 +33,10 @@ function restoreBounds(saved) {
   return visible ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height } : { width: saved.width, height: saved.height };
 }
 
-// запуск из исходников не должен делить профиль с установленным приложением (и мешать ему);
-// заданный ключом --user-data-dir профиль не трогаем (так запускаются проверки npm run smoke)
-if (!app.isPackaged && !app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'Матч-центр (разработка)'));
+// папка данных — на латинице; запуск из исходников не должен делить профиль с установленным
+// приложением (и мешать ему), у него своя папка. Заданный ключом --user-data-dir профиль
+// не трогаем (так запускаются проверки npm run smoke)
+if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', dataDir(app.getPath('appData'), app.isPackaged));
 
 let win = null;
 let mc = null;
