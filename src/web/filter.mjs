@@ -17,7 +17,7 @@ export function markFavorites(day, settings) {
 
 // Разделы списка: «Сейчас в эфире» (только сегодня) и турниры.
 // pinned — ключи строк с открытым плеером или подробностями: их не прячет никакой фильтр.
-// byTime — турниры идут по началу первого показанного матча, а не в порядке из настроек.
+// byTime — матчи идут по времени начала, а не турнир за турниром в порядке из настроек.
 export function sections({ day, isToday, filters: f, q, pinned, byTime }) {
   q = q.trim().toLowerCase();
   const hit = (m, lg) => (!f.streams || m.streams.length) && (!f.live || isLive(m)) && (!f.favorites || m.favorite)
@@ -37,9 +37,16 @@ export function sections({ day, isToday, filters: f, q, pinned, byTime }) {
     const rows = lg.matches.filter((m) => pinned.has(`m:${m.id}`) || hit(m, lg)).map((m) => ({ key: `m:${m.id}`, m, lg }));
     if (rows.length) leagues.push({ key: `lg:${lg.id}`, lg, rows });
   }
-  // матчи турнира остаются вместе; при равном времени — порядок из настроек
-  if (byTime) leagues.sort((a, b) => firstStart(a) - firstStart(b));
-  return [...out, ...leagues];
-}
+  if (!byTime) return [...out, ...leagues];
 
-const firstStart = (s) => Math.min(...s.rows.map((r) => Date.parse(r.m.utcTime)));
+  // Матчи идут по времени начала; начинающиеся одновременно стоят блоком своего турнира,
+  // блоки одного времени — в порядке из настроек. Соседние блоки одного турнира — один раздел.
+  const slots = leagues.flatMap((s, order) => s.rows.map((r) => ({ r, lg: s.lg, order, at: Date.parse(r.m.utcTime) })));
+  slots.sort((a, b) => a.at - b.at || a.order - b.order);
+  for (const { r, lg } of slots) {
+    const last = out.at(-1);
+    if (last?.lg === lg) last.rows.push(r);
+    else out.push({ key: `lg:${lg.id}:${r.m.id}`, lg, rows: [r] }); // турнир может встретиться в списке не раз
+  }
+  return out;
+}

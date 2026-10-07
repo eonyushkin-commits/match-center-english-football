@@ -216,7 +216,7 @@ function renderFilters() {
   const byTime = !!state.settings?.ui.leaguesByTime;
   $('#by-time').classList.toggle('on', byTime);
   $('#by-time').setAttribute('aria-pressed', String(byTime));
-  $('#by-time').title = `Турниры: ${byTime ? 'по времени начала' : 'в порядке списка'}`;
+  $('#by-time').title = `Порядок матчей: ${byTime ? 'по времени начала' : 'по турнирам'}`;
 }
 
 function renderStatus() {

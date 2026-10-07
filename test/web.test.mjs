@@ -114,18 +114,19 @@ test('sections: строка с открытым плеером не пряче�
   assert.deepEqual(pick({ filters: { ...NO, favorites: true }, pinned: new Set(['m:4', 'live:1']) }), ['live=1', 'lg:47=3', 'lg:132=4']);
 });
 
-test('sections: по времени начала — турниры по первому показанному матчу, матчи турнира вместе', () => {
-  const at = (id, hh) => match({ id, utcTime: `2026-09-20T${hh}:00:00Z` });
+test('sections: по времени начала — матчи по времени, одновременные стоят блоком своего турнира', () => {
+  const at = (id, time, o) => match({ id, utcTime: `2026-09-20T${time}:00Z`, ...o });
   const d = { leagues: [
-    { id: 47, name: 'Премьер-лига', country: 'Англия', matches: [at(1, 14), at(2, 16)] },
-    { id: 48, name: 'Чемпионшип', country: 'Англия', matches: [at(3, 12), at(4, 15)] },
-    { id: 132, name: 'Кубок Англии', country: 'Англия', matches: [at(5, 14)] },
+    { id: 47, name: 'Премьер-лига', country: 'Англия', matches: [at(1, '14:00', { favorite: true }), at(2, '14:00'), at(6, '17:00', { favorite: true })] },
+    { id: 48, name: 'Чемпионшип', country: 'Англия', matches: [at(3, '12:00'), at(4, '17:00'), at(7, '14:00')] },
+    { id: 132, name: 'Кубок Англии', country: 'Англия', matches: [at(5, '14:30')] },
   ] };
   const of = (o) => keys(sections({ day: d, isToday: false, filters: NO, q: '', pinned: new Set(), ...o }));
-  assert.deepEqual(of({}), ['lg:47=1,2', 'lg:48=3,4', 'lg:132=5']);
-  assert.deepEqual(of({ byTime: true }), ['lg:48=3,4', 'lg:47=1,2', 'lg:132=5'], 'при равном времени — порядок из настроек');
-  d.leagues[0].matches[0].favorite =d.leagues[1].matches[1].favorite = true;
-  assert.deepEqual(of({ byTime: true, filters: { ...NO, favorites: true } }), ['lg:47=1', 'lg:48=4'], 'скрытый фильтром матч на порядок не влияет');
+  assert.deepEqual(of({}), ['lg:47=1,2,6', 'lg:48=3,4,7', 'lg:132=5']);
+  assert.deepEqual(of({ byTime: true }),
+    ['lg:48:3=3', 'lg:47:1=1,2', 'lg:48:7=7', 'lg:132:5=5', 'lg:47:6=6', 'lg:48:4=4'],
+    '14:30 идёт после 14:00 и до 17:00; при равном времени — порядок из настроек');
+  assert.deepEqual(of({ byTime: true, filters: { ...NO, favorites: true } }), ['lg:47:1=1,6'], 'соседние блоки одного турнира — один раздел');
 });
 
 // ---------- view: строка матча ----------
