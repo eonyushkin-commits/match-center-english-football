@@ -293,6 +293,13 @@ function toggleDetails(rowKey) {
   subscribe(); // события матча приходят лентой, пока они раскрыты
 }
 
+function closeRow(rowKey) {
+  const hadDetails = opened.details?.rowKey === rowKey;
+  if (hadDetails) opened.toggleDetails(rowKey);
+  closePlayer();
+  if (hadDetails) subscribe(); // события матча больше не нужны
+}
+
 // ---------- панель каналов ----------
 function renderPopover() {
   $('#status-pop').innerHTML = popoverHtml(state.status?.vk, state.settings?.refreshSeconds);
@@ -524,7 +531,10 @@ $('#list').addEventListener('click', (e) => {
   // клик по названиям команд или кнопка «События и составы» (под плеером или у матча в окне)
   const more = e.target.closest('[data-details]');
   if (more || e.target.closest('.match .teams')) {
-    toggleDetails(more ? more.dataset.details : e.target.closest('[data-key]').dataset.key);
+    const rowKey = more ? more.dataset.details : e.target.closest('[data-key]').dataset.key;
+    // клик по командам матча, который смотрят, сворачивает всё: и эфир, и события
+    if (!more && opened.player?.rowKey === rowKey) closeRow(rowKey);
+    else toggleDetails(rowKey);
     return;
   }
   const a = e.target.closest('[data-play]');

@@ -89,6 +89,13 @@ app.whenReady().then(async () => {
     await on(`document.querySelectorAll('.details .ev').length > 0`, 'события матча');
   });
 
+  await step('клик по командам матча, который смотрят: эфир и события сворачиваются', async () => {
+    await click('[data-key="live:101"] .teams');
+    await on(`!document.querySelector('.player') && !document.querySelector('.details')`, 'плеер и события закрыты');
+    await click('[data-key="live:101"] .stream[data-play]');
+    await on(`!!document.querySelector('.player.open iframe') && !!document.querySelector('.details')`, 'плеер и события снова открыты');
+  });
+
   await step('другой канал того же матча: плеер переключается на месте', async () => {
     await click('[data-key="live:101"] .stream[data-play]:not(.active)');
     await until('эфир второго канала', async () => /oid=-2&id=1&/.test(await frame()));
