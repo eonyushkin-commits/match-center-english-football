@@ -1,6 +1,7 @@
 // Точечное обновление DOM.
 // Узлы с тем же ключом остаются на месте, меняется только их содержимое. Поэтому iframe плеера
 // никогда не переносится по DOM (перенос перезапускает видео), что бы ни пришло с сервера.
+// Сменился порядок — узел с пометкой fixed (плеер и его раздел) стоит, переставляются соседи.
 export const setHtml = (node, html) => { if (node._html !== html) { node.innerHTML = html; node._html = html; } };
 
 export function reconcile(parent, items) {
@@ -18,6 +19,15 @@ export function reconcile(parent, items) {
     if (it.cls !== undefined && n.className !== it.cls) n.className = it.cls;
     if (it.html !== undefined) setHtml(n, it.html);
     if (n === cur) cur = skipClosing(cur.nextElementSibling);
-    else parent.insertBefore(n, cur);
+    else if (it.fixed && n.parentNode === parent) {
+      // узел с плеером двигать нельзя: отодвигаем в конец то, что стоит перед ним, —
+      // оно встанет на место в свой черёд
+      while (cur !== n) {
+        const next = skipClosing(cur.nextElementSibling);
+        parent.appendChild(cur);
+        cur = next;
+      }
+      cur = skipClosing(n.nextElementSibling);
+    } else parent.insertBefore(n, cur);
   }
 }

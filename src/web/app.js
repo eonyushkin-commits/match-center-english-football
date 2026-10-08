@@ -2,7 +2,7 @@
 // что показывать — в filter.mjs, что раскрыто — в opened.mjs, форматирование — в format.mjs:
 // они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
-import { markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
+import { keepSection, markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
 import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, withTime, ymd } from './format.mjs';
 import { createOpened, matchIdOf } from './opened.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
@@ -241,7 +241,8 @@ function renderList() {
     return;
   }
   list.setAttribute('aria-busy', 'false');
-  const secs = sections();
+  const host = playerEl?.closest('section')?.dataset.key; // раздел, где плеер уже стоит: его не пересоздаём и не двигаем
+  const secs = keepSection(sections(), opened.player?.rowKey, host);
   if (!secs.length) {
     const f = state.settings.ui.filters;
     reconcile(list, [{ key: 'empty', cls: 'empty', html: emptyHtml(!!(state.q || f.streams || f.live || f.favorites)) }]);
@@ -249,6 +250,7 @@ function renderList() {
   }
   reconcile(list, secs.map((s) => ({
     key: s.key,
+    fixed: s.key === host,
     cls: s.live ? 'league live' : 'league',
     create: () => {
       const n = document.createElement('section');
@@ -279,7 +281,7 @@ function renderList() {
 
 // что идёт под строкой матча (см. opened.under)
 const under = {
-  player: () => ({ key: 'player', node: playerEl }),
+  player: () => ({ key: 'player', node: playerEl, fixed: true }),
   popbar: (r) => ({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, opened.details?.rowKey === r.key) }),
   details: (r) => ({ key: 'details', cls: 'details', html: detailsHtml(r.m, opened.details, isHidden(r.m)) }),
 };
@@ -426,6 +428,8 @@ async function openMatchFromNotification(date, id) {
   setTimeout(() => row?.classList.remove('flash'), 1700);
 }
 window.mc?.onOpenMatch(({ date, id }) => openMatchFromNotification(date, id));
+// окно убрали в трей — эфир в нём больше не смотрят: иначе звук шёл бы без окна
+window.mc?.onToTray(() => { if (opened.player) closePlayer(true); });
 
 // ---------- настройки ----------
 // Названия турниров, добавленных по номеру: спрашиваем заранее, при запуске, чтобы диалог

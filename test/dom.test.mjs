@@ -33,6 +33,23 @@ test('reconcile: плеер между строками переживает о�
   assert.equal(player.firstElementChild, iframe);
 });
 
+test('reconcile: при смене порядка узел с плеером стоит, переставляются соседи', () => {
+  const { document, list } = setup();
+  const player = document.createElement('div');
+  const item = { key: 'player', node: player, fixed: true };
+  reconcile(list, [{ key: 'm:2' }, { key: 'm:1' }, item, { key: 'm:3' }]);
+  const moved = [];
+  for (const how of ['insertBefore', 'appendChild']) {
+    const real = list[how].bind(list);
+    list[how] = (n, ...rest) => { moved.push(n.dataset.key); return real(n, ...rest); };
+  }
+  reconcile(list, [{ key: 'm:1' }, item, { key: 'm:2' }, { key: 'm:3' }]);
+  assert.deepEqual(keys(list), ['m:1', 'player', 'm:2', 'm:3']);
+  reconcile(list, [{ key: 'm:3' }, { key: 'm:2' }, { key: 'm:1' }, item]);
+  assert.deepEqual(keys(list), ['m:3', 'm:2', 'm:1', 'player']);
+  assert.ok(!moved.includes('player'), `плеер не двигали: ${moved.join(', ')}`);
+});
+
 test('reconcile: лишние узлы удаляются, закрывающийся плеер доигрывает анимацию', () => {
   const { document, list } = setup();
   reconcile(list, [{ key: 'm:1', html: '1' }, { key: 'm:2', html: '2' }]);

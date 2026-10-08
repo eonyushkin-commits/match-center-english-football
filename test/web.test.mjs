@@ -1,7 +1,7 @@
 // Логика и разметка страницы — без браузера: src/web/*.mjs не трогают DOM.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
+import { keepSection, markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
 import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, dateStrip, inDateRange } from '../src/web/format.mjs';
 import { detailsHtml, detailsToggleHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
@@ -127,6 +127,16 @@ test('sections: по времени начала — матчи по време�
     ['lg:48:3=3', 'lg:47:1=1,2', 'lg:48:7=7', 'lg:132:5=5', 'lg:47:6=6', 'lg:48:4=4'],
     '14:30 идёт после 14:00 и до 17:00; при равном времени — порядок из настроек');
   assert.deepEqual(of({ byTime: true, filters: { ...NO, favorites: true } }), ['lg:47:1=1,6'], 'соседние блоки одного турнира — один раздел');
+});
+
+test('keepSection: раздел со строкой плеера сохраняет ключ своего узла', () => {
+  const secs = () => [{ key: 'lg:47:1', rows: [{ key: 'm:1' }] }, { key: 'lg:132:5', rows: [{ key: 'm:5' }] }, { key: 'lg:47:6', rows: [{ key: 'm:6' }] }];
+  const ids = (list) => list.map((s) => `${s.key}=${s.rows[0].key}`);
+  // блок распался: плеер у матча 6 стоит в узле lg:47:1 — узел остаётся его, первому блоку достаётся новый ключ
+  assert.deepEqual(ids(keepSection(secs(), 'm:6', 'lg:47:1')), ['lg:47:6=m:1', 'lg:132:5=m:5', 'lg:47:1=m:6']);
+  assert.deepEqual(ids(keepSection(secs(), 'm:6', 'lg:47')), ['lg:47:1=m:1', 'lg:132:5=m:5', 'lg:47=m:6'], 'сменился порядок — ключ прежнего раздела');
+  assert.deepEqual(ids(keepSection(secs(), 'm:6', undefined)), ids(secs()), 'плеера на странице ещё нет');
+  assert.deepEqual(ids(keepSection(secs(), 'm:9', 'lg:47:1')), ids(secs()), 'строки плеера нет в списке');
 });
 
 // ---------- view: строка матча ----------

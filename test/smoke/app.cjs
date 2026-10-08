@@ -150,12 +150,14 @@ app.whenReady().then(async () => {
     assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'live:101');
   });
 
-  await step('крестик прячет окно в трей: приложение работает, лента закрыта и открывается при показе', async () => {
+  await step('крестик прячет окно в трей: приложение работает, плеер и лента закрыты, лента открывается при показе', async () => {
     for (const w of players()) w.destroy();
+    assert.equal(await page(`!!document.querySelector('.player iframe')`), true, 'перед закрытием плеер открыт');
     win.close();
     await sleep(500);
     assert.equal(win.isDestroyed(), false);
     assert.equal(win.isVisible(), false);
+    assert.equal(await page(`!!document.querySelector('.player iframe')`), false, 'плеер закрыт');
     const before = subscriptions;
     win.showInactive();
     await until('новая подписка при показе', () => subscriptions === before + 1);

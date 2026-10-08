@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rmdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -75,6 +75,27 @@ test('update сохраняет на диск и сообщает об изме�
   const reopened = await openSettings(dir);
   assert.equal(reopened.get().ui.filters.live, true);
   assert.equal(reopened.get().favorites[0].id, 10260);
+});
+
+test('update: файл не записался — настройки остаются прежними, изменения нет', async () => {
+  const dir = await tmp();
+  const settings = await openSettings(dir);
+  let changes = 0;
+  settings.on('change', () => { changes++; });
+  await mkdir(path.join(dir, 'settings.json.tmp')); // на месте временного файла — папка: запись не удастся
+  await assert.rejects(settings.update({ tray: false }));
+  assert.deepEqual([settings.get().tray, changes], [true, 0]);
+  await rmdir(path.join(dir, 'settings.json.tmp'));
+  await settings.update({ autostart: true });
+  assert.deepEqual([settings.get().tray, settings.get().autostart, changes], [true, true, 1], 'несохранённая правка не всплывает позже');
+});
+
+test('update: правки подряд ложатся одна поверх другой', async () => {
+  const dir = await tmp();
+  const settings = await openSettings(dir);
+  await Promise.all([settings.update({ tray: false }), settings.update({ autostart: true })]);
+  const saved = (await openSettings(dir)).get();
+  assert.deepEqual([saved.tray, saved.autostart], [false, true]);
 });
 
 test('трей, автозапуск и режим без спойлеров', () => {

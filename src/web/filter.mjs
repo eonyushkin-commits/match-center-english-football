@@ -15,6 +15,18 @@ export function markFavorites(day, settings) {
     }
 }
 
+// Раздел со строкой rowKey получает ключ hostKey — ключ раздела, в котором эта строка уже стоит
+// на странице. Так раздел с плеером не создаётся заново, как бы ни перестроились блоки (перенос
+// iframe перезапускает видео). Раздел, уже занявший этот ключ, берёт взамен ключ первого.
+export function keepSection(secs, rowKey, hostKey) {
+  const mine = hostKey && secs.find((s) => s.rows.some((r) => r.key === rowKey));
+  if (!mine || mine.key === hostKey) return secs;
+  const other = secs.find((s) => s.key === hostKey);
+  if (other) other.key = mine.key;
+  mine.key = hostKey;
+  return secs;
+}
+
 // Разделы списка: «Сейчас в эфире» (только сегодня) и турниры.
 // pinned — ключи строк с открытым плеером или подробностями: их не прячет никакой фильтр.
 // byTime — матчи идут по времени начала, а не турнир за турниром в порядке из настроек.

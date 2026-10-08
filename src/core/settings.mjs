@@ -193,16 +193,19 @@ export async function openSettings(dir) {
   return Object.assign(events, {
     warnings,
     get: () => resolved,
-    async update(patch) {
-      const next = applyPatch(user, patch);
-      const prev = resolved;
-      user = next;
-      resolved = resolve(user);
-      queue = queue.catch(() => {}).then(() => write(user));
-      await queue;
-      warnings.length = 0; // файл перезаписан целым — предупреждение о поломке больше не актуально
-      events.emit('change', resolved, prev);
-      return resolved;
+    // Сначала файл, потом память: не записалось — приложение целиком остаётся на прежних настройках.
+    // Правки идут по очереди, каждая — поверх предыдущей.
+    update(patch) {
+      return (queue = queue.catch(() => {}).then(async () => {
+        const next = applyPatch(user, patch);
+        await write(next);
+        const prev = resolved;
+        user = next;
+        resolved = resolve(user);
+        warnings.length = 0; // файл перезаписан целым — предупреждение о поломке больше не актуально
+        events.emit('change', resolved, prev);
+        return resolved;
+      }));
     },
   });
 }
