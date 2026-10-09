@@ -412,9 +412,10 @@ function popOut() {
   const found = p && streamOf(p.rowKey, p.url);
   if (!found) return;
   const { m, s, embed } = found;
-  // запись, которую уже смотрели, продолжается в окне с того же места и сразу со звуком
-  // (без mute=0 плеер VK при автозапуске выключает звук)
-  const src = `${withTime(embed, position)}${position == null ? '' : '&autoplay=1&mute=0'}`;
+  // идущий эфир и запись, которую уже смотрели, запускаются в окне сами и сразу со звуком
+  // (без mute=0 плеер VK при автозапуске выключает звук); запись — с того же места
+  const autoplay = s.status === 'started' || position != null;
+  const src = `${withTime(embed, position)}${autoplay ? '&autoplay=1&mute=0' : ''}`;
   const q = new URLSearchParams({ src, url: withTime(s.url, position), title: `${matchTitle(m)} · ${s.channel}` });
   window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   opened.popOut(); // в двух местах сразу один эфир не нужен
