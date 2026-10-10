@@ -5,6 +5,7 @@ const {
 } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const { keepContentRatio } = require('./aspect.cjs');
 const { dataDir } = require('./data-dir.cjs');
 
 const APP_ID = 'ru.sportcenter.matchcenter';
@@ -111,7 +112,7 @@ async function start() {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
-          width: 800, height: 450, minWidth: 320, minHeight: 180, alwaysOnTop: true,
+          width: 800, height: 450, minWidth: 320, minHeight: 180, useContentSize: true, alwaysOnTop: true,
           backgroundColor: '#000000', autoHideMenuBar: true, icon: ICON,
           // мост с приложением («Поверх окон») сам в новое окно не переходит
           webPreferences: { partition: 'matchcenter', preload: PRELOAD },
@@ -131,7 +132,7 @@ async function start() {
   });
   win.webContents.on('did-create-window', (child) => {
     child.setMenuBarVisibility(false);
-    child.setAspectRatio(16 / 9);
+    keepContentRatio(child, 16 / 9); // видео занимает окно целиком, без чёрных полос
     child.webContents.setWindowOpenHandler(({ url }) => {
       openExternal(url);
       return { action: 'deny' };

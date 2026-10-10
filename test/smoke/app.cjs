@@ -106,6 +106,7 @@ app.whenReady().then(async () => {
     await click('.player .popout');
     await until('окно плеера', () => players().length === 1 && !players()[0].webContents.isLoading());
     assert.match(await frame(players()[0]), /oid=-2&id=1&.*&autoplay=1&mute=0$/); // идущий эфир в окне запускается сам
+    assert.deepEqual(players()[0].getContentSize(), [800, 450]); // 16:9 у видео, а не у окна с заголовком
     assert.match(players()[0].getTitle() + await js(players()[0], 'document.title'), /Арсенал — Челси · АПЛ Навсегда/);
     await on(`!document.querySelector('.player.open')`, 'плеер в строке закрыт');
     const toggle = '.popbar [data-details="live:101"]';
