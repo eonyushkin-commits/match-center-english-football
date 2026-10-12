@@ -50,9 +50,10 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
   const bell = !m.started && !m.cancelled
     ? `<button type="button" class="bell${m.remind ? ' on' : ''}" data-remind aria-pressed="${!!m.remind}"
         title="${m.remind ? 'Не напоминать' : 'Напомнить за 15 минут и в начале матча'}">🔔</button>` : '';
-  return `<div class="when${live ? ' live' : ''}">${when}${bell}</div>
+  // турнир — отдельной строкой над командами: справа от счёта он сдвигал бы счёт у каждого матча по-своему
+  return `${showLeague ? `<div class="lg-tag">${esc(lg.name)}</div>` : ''}<div class="when${live ? ' live' : ''}">${when}${bell}</div>
     <div class="teams">${team(m.home, m.away)}${team(m.away, m.home)}</div>
-    <div class="side">${showLeague ? `<span class="lg-tag">${esc(lg.name)}</span>` : ''}</div>
+    <div class="side"></div>
     ${chips ? `<div class="streams">${chips}</div>` : ''}`;
 }
 
