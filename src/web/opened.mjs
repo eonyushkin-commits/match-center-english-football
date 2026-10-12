@@ -26,6 +26,10 @@ export function createOpened() {
       if (player) popped.add(player.rowKey);
       player = null;
     },
+    // окно с эфиром закрыли
+    closePopOut(rowKey) {
+      popped.delete(rowKey);
+    },
 
     // события раскрыты у одного матча; повторное нажатие сворачивает
     toggleDetails(rowKey) {

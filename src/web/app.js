@@ -333,19 +333,26 @@ function streamOf(rowKey, url) {
 // На какой секунде запись во встроенном плеере — чтобы окно «В окне» продолжило с того же места.
 // Плеер VK сообщает это сам, если открыт с js_api=1 и получил init. null — запись не запускали.
 let position = null;
+const popouts = new Map(); // окно «В окне» → { rowKey, url, position }: закроют — эфир вернётся в строку матча
 addEventListener('message', (e) => {
+  const pop = popouts.get(e.source);
+  if (pop) { // окно сообщает, на какой секунде запись
+    if (e.origin === location.origin && Number.isFinite(e.data?.position)) pop.position = e.data.position;
+    return;
+  }
   if (!playerEl || e.source !== playerEl.querySelector('iframe').contentWindow) return;
   const { state: playback, time } = e.data || {};
   if (playback && playback !== 'unstarted' && Number.isFinite(time)) position = Math.floor(time);
 });
 
-// url — ссылка эфира
-function openPlayer(rowKey, url) {
+// url — ссылка эфира. resume — эфир вернулся из окна: { position } — запускается сам,
+// запись — с той же секунды
+function openPlayer(rowKey, url, resume = null) {
   const found = streamOf(rowKey, url);
   if (!found) return;
   const { m, s, embed } = found;
-  const src = `${embed}${s.status === 'finished' ? '&js_api=1' : ''}`;
-  position = null;
+  position = resume?.position ?? null;
+  const src = `${withTime(embed, position)}${s.status === 'finished' ? '&js_api=1' : ''}${resume ? '&autoplay=1&mute=0' : ''}`;
   const sameRow = playerEl && opened.player?.rowKey === rowKey;
   opened.play(rowKey, url);
 
@@ -415,11 +422,27 @@ function popOut() {
   // идущий эфир и запись, которую уже смотрели, запускаются в окне сами и сразу со звуком
   // (без mute=0 плеер VK при автозапуске выключает звук); запись — с того же места
   const autoplay = s.status === 'started' || position != null;
-  const src = `${withTime(embed, position)}${autoplay ? '&autoplay=1&mute=0' : ''}`;
+  // js_api — окно с записью сообщает позицию: по ней запись продолжится в приложении, когда окно закроют
+  const src = `${withTime(embed, position)}${s.status === 'finished' ? '&js_api=1' : ''}${autoplay ? '&autoplay=1&mute=0' : ''}`;
   const q = new URLSearchParams({ src, url: withTime(s.url, position), title: `${matchTitle(m)} · ${s.channel}` });
-  window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
+  const w = window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
+  if (w) watchPopout(w, { rowKey: p.rowKey, url: p.url, position });
   opened.popOut(); // в двух местах сразу один эфир не нужен
   closePlayer();
+}
+
+// Окно «В окне» закрыли — эфир возвращается в строку своего матча и идёт дальше.
+function watchPopout(w, what) {
+  popouts.set(w, what);
+  const timer = setInterval(() => {
+    if (!w.closed) return;
+    clearInterval(timer);
+    popouts.delete(w);
+    opened.closePopOut(what.rowKey);
+    // не возвращаем, если в приложении уже смотрят другой эфир или его окно скрыто (звук шёл бы без окна)
+    if (opened.player || document.hidden) renderList();
+    else openPlayer(what.rowKey, what.url, { position: what.position });
+  }, 400);
 }
 
 // Клик по уведомлению: день матча, строка матча и плеер, если трансляция уже идёт

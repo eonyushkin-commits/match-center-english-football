@@ -25,6 +25,17 @@ import { embedUrl } from './format.mjs';
   frame.allowFullscreen = true;
   document.body.prepend(frame);
 
+  // Запись сообщает приложению, на какой она секунде (плеер VK шлёт это сам, если открыт с js_api=1
+  // и получил init): закроют окно — приложение продолжит её с того же места.
+  if (new URL(src).searchParams.has('js_api')) {
+    frame.addEventListener('load', () => frame.contentWindow.postMessage({ method: 'init' }, new URL(src).origin));
+    addEventListener('message', (e) => {
+      if (e.source !== frame.contentWindow) return;
+      const { state, time } = e.data || {};
+      if (state && state !== 'unstarted' && Number.isFinite(time)) window.opener?.postMessage({ position: Math.floor(time) }, location.origin);
+    });
+  }
+
   // «Поверх окон» есть только в приложении; в браузере окно обычное
   const pin = document.getElementById('pin');
   if (window.mc?.setOnTop) {

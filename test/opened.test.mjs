@@ -33,6 +33,14 @@ test('«в окне»: в строке остаётся кнопка событ�
   assert.deepEqual(o.under('m:1'), ['details']);
 });
 
+test('«в окне»: окно закрыли — кнопка событий из строки уходит', () => {
+  const o = createOpened();
+  o.play('m:1', 'a');
+  o.popOut();
+  o.closePopOut('m:1');
+  assert.deepEqual(o.under('m:1'), []);
+});
+
 test('события раскрыты у одного матча; повторное нажатие сворачивает', () => {
   const o = createOpened();
   o.toggleDetails('m:1');

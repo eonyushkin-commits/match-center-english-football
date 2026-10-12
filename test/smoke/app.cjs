@@ -130,6 +130,16 @@ app.whenReady().then(async () => {
     assert.deepEqual(frames.map((src) => /oid=-(\d)&id=(\d)/.exec(src).slice(1).join('_')).sort(), ['1_2', '2_1']);
   });
 
+  await step('окно с записью закрыли: запись возвращается в строку матча и запускается сама', async () => {
+    await on(`!document.querySelector('.player')`, 'плеер в строке закрыт');
+    for (const w of players()) if (/id=2&/.test(await frame(w))) w.close();
+    await until('осталось одно окно', () => players().length === 1);
+    await until('плеер записи в строке', async () => /oid=-1&id=2&/.test(await frame() || ''));
+    assert.match(await frame(), /hash=smoke&js_api=1&autoplay=1&mute=0$/);
+    assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'm:102');
+    assert.equal(await page(`!!document.querySelector('.popbar [data-details="m:102"]')`), false);
+  });
+
   await step('окна не уходят на чужой сайт: такая ссылка открывается в браузере', async () => {
     const child = players()[0];
     const before = child.webContents.getURL();
