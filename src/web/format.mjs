@@ -44,7 +44,6 @@ export function embedUrl(s) {
   try {
     const u = new URL(s.embed);
     if (u.protocol !== 'https:' || !/(^|\.)(vkvideo\.ru|vk\.com|vk\.ru)$/.test(u.hostname)) return null;
-    u.searchParams.delete('__ref');
     return u.href;
   } catch {
     return null;

@@ -11,12 +11,11 @@ import { notices } from '../src/web/view.mjs';
 const answers = (body) => async () => new Response(JSON.stringify(body));
 const changed = /изменил формат ответа \(.+\) — нужна новая версия приложения/;
 
-test('FotMob: расписание без списка leagues, названия без Participants, матч без header.status — ошибка формата', async () => {
+test('FotMob: расписание без списка leagues, названия без Participants — ошибка формата', async () => {
   const f = createFotmob(answers({ matches: [] }));
   await assert.rejects(f.day('20260920', 'Europe/Moscow'), (e) => e instanceof FormatError && /FotMob.*нет списка leagues/.test(e.message));
   await assert.rejects(f.names(), changed);
   await assert.rejects(f.leagues(), changed);
-  await assert.rejects(f.match(1), changed);
 });
 
 test('FotMob: день за пределами расписания (null) — просто без матчей', async () => {

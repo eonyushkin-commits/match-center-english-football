@@ -34,8 +34,7 @@ before(async () => {
   const settings = await openSettings(await mkdtemp(path.join(os.tmpdir(), 'mc-server-')));
   const poller = Object.assign(new EventEmitter(), { snapshot: () => snapshot, retry() {} });
   const fotmob = { day: async () => fm, names: async () => ru, leagues: async () => allLeagues };
-  const details = async (id) => ({ state: 'live', events: [], id });
-  const feed = createFeed({ settings, poller, fotmob, details, version: 'test' });
+  const feed = createFeed({ settings, poller, fotmob, version: 'test' });
   const handler = createHandler({ settings, poller, fotmob, feed });
   ({ server: srv, url: base } = await startServer(handler));
 });
@@ -58,11 +57,10 @@ async function events(query, names) {
   return got;
 }
 
-test('/api/events: расписание — турниры из настроек, русские названия, привязанный эфир; каналы; события матча', async () => {
-  const { day: j, status, details } = await events('date=20260920&tz=Europe/Moscow&match=100', ['day', 'status', 'details']);
+test('/api/events: расписание — турниры из настроек, русские названия, привязанный эфир; каналы', async () => {
+  const { day: j, status } = await events('date=20260920&tz=Europe/Moscow', ['day', 'status']);
   assert.equal(status.version, 'test');
   assert.equal(status.vk.streamCount, 1);
-  assert.deepEqual(details, { state: 'live', events: [], id: '100' });
   assert.equal(j.leagues.length, 1);
   assert.equal(j.leagues[0].name, 'Премьер-Лига');
   const m = j.leagues[0].matches[0];
@@ -78,7 +76,6 @@ test('/api/leagues: «страна · турнир» по-русски, у ме�
 test('/api/events: неверные параметры — 400, а не падение', async () => {
   assert.equal((await fetch(`${base}/api/events?date=2026-09-20`)).status, 400);
   assert.equal((await fetch(`${base}/api/events?date=20260920&tz=Mars/Olympus`)).status, 400);
-  assert.equal((await fetch(`${base}/api/events?date=20260920&match=x`)).status, 400);
 });
 
 test('/api/settings: сохранение и проверка входных данных', async () => {

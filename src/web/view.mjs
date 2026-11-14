@@ -14,6 +14,10 @@ function streamLabels(streams) {
   return streams.map((s) => ((seen[s.channel] = (seen[s.channel] || 0) + 1) > 1 ? `${s.channel} ${seen[s.channel]}` : s.channel));
 }
 
+// Подсказка у кнопки канала. «Видео недоступно» в окне плеера — значит, VK запретил встраивание
+// этой записи (так у части каналов), а на сайте VK она идёт.
+const OPEN_HINT = 'Ctrl + клик — открыть в браузере (если в плеере «Видео недоступно»)';
+
 // Строка матча. view: { favIds — Set команд в избранном, hidden(m) — прятать ли счёт,
 // player — { rowKey, url } открытого плеера }
 export function rowHtml({ key, m, lg, showLeague }, view) {
@@ -40,7 +44,7 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
   let chips = m.streams.map((s, i) => {
     const aud = audience(s);
     return `<a class="stream ${s.status}${p?.rowKey === key && p.url === s.url ? ' active' : ''}"
-      href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(aud ? `${s.title}\n${aud.title}` : s.title)}" data-play>
+      href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(`${aud ? `${s.title}\n${aud.title}` : s.title}\n${OPEN_HINT}`)}" data-play>
       <span class="tag">${STATUS[s.status] || ''}</span>${esc(labels[i])}${aud ? `<span class="aud">${esc(aud.text)}</span>` : ''}</a>`;
   }).join('');
   if (!chips && !m.finished && !m.cancelled) {
@@ -60,52 +64,6 @@ export function rowHtml({ key, m, lg, showLeague }, view) {
 export function emptyHtml(filtered) {
   if (filtered) return '<b>Нет матчей по выбранным фильтрам</b><button type="button" class="btn" data-action="reset-filters">Сбросить фильтры</button>';
   return '<b>В этот день матчей нет</b>Турниры выбираются в настройках.';
-}
-
-// ---------- события и составы ----------
-const CARD = { yellow: '🟨', red: '🟥', yellowred: '🟨🟥' };
-
-function eventHtml(e) {
-  if (e.kind === 'half') return `<li class="ev half"><span>${esc(e.label)} · ${esc(e.score.join(':'))}</span></li>`;
-  let icon = '⇄';
-  let text = `<span>${esc(e.in)}</span><small>${esc(e.out)}</small>`;
-  if (e.kind === 'goal') {
-    icon = '⚽';
-    text = `<b>${esc(e.player)}</b>${e.penalty ? ' (пен.)' : ''}${e.own ? ' (авт.)' : ''}${e.assist ? `<small>${esc(e.assist)}</small>` : ''}`;
-  } else if (e.kind === 'card') {
-    icon = CARD[e.card] || '🟨';
-    text = `<span>${esc(e.player)}</span>`;
-  }
-  const body = `<div class="evtext">${text}</div>`;
-  return `<li class="ev ${e.kind}"><div class="h">${e.side === 'home' ? body : ''}</div>
-    <div class="mid"><span class="min">${esc(e.minute)}’</span><span class="icon">${icon}</span>${e.kind === 'goal' ? `<b class="evscore">${esc(e.score.join(':'))}</b>` : ''}</div>
-    <div class="a">${e.side === 'away' ? body : ''}</div></li>`;
-}
-
-function lineupsHtml(l, m, subsOpen) {
-  const players = (list) => `<ol>${list.map((p) => `<li><span class="num">${esc(p.number)}</span>${esc(p.name)}</li>`).join('')}</ol>`;
-  const team = (t, name) => `<div class="lu"><div class="luhead"><b>${esc(name)}</b>${t.formation ? `<span>${esc(t.formation)}</span>` : ''}</div>
-    ${players(t.starters)}${t.coach ? `<div class="coach">Тренер: ${esc(t.coach)}</div>` : ''}
-    ${t.subs.length ? `<details${subsOpen ? ' open' : ''}><summary>Запасные · ${t.subs.length}</summary>${players(t.subs)}</details>` : ''}</div>`;
-  return `<div class="lineups">${team(l.home, m.home.name)}${team(l.away, m.away.name)}</div>`;
-}
-
-// Кнопка «События и составы» — под встроенным плеером и у матча, отправленного в отдельное окно
-export const detailsToggleHtml = (rowKey, open) =>
-  `<button type="button" class="pmore${open ? ' on' : ''}" data-details="${esc(rowKey)}" aria-expanded="${open}">События и составы</button>`;
-
-// d — раскрытые подробности { data, error, subsOpen }; hidden — счёт скрыт режимом без спойлеров
-export function detailsHtml(m, d, hidden) {
-  if (d.error) return `<div class="dnote">Не удалось загрузить: ${esc(d.error)}</div>`;
-  if (!d.data) return '<div class="dnote">Загрузка…</div>';
-  const x = d.data;
-  let events;
-  if (hidden) events = `<div class="dnote">События скрыты, чтобы не выдать счёт. <button type="button" class="btn" data-reveal="${m.id}">Показать счёт и события</button></div>`;
-  else if (!x.events.length) events = `<div class="dnote">${x.state === 'upcoming' ? 'Матч ещё не начался.' : 'Событий пока нет.'}</div>`;
-  else events = `<ol class="timeline">${x.events.map(eventHtml).join('')}</ol>`;
-  const lineups = x.lineups ? lineupsHtml(x.lineups, m, d.subsOpen) : x.state === 'upcoming' ? '<div class="dnote">Составы появятся примерно за час до начала.</div>' : '';
-  const fotmob = `<a class="fm" href="https://www.fotmob.com/match/${m.id}" target="_blank" rel="noopener" title="Открыть матч в FotMob">FotMob ↗</a>`;
-  return `<div class="dinner"><div class="dhead"><h4>События</h4>${fotmob}</div>${events}${lineups ? `<h4>Составы</h4>${lineups}` : ''}</div>`;
 }
 
 // ---------- обновление приложения: «Скачать» → «Установить» ----------

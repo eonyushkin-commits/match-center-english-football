@@ -7,10 +7,8 @@ contextBridge.exposeInMainWorld('mc', {
   onUpdate: (cb) => ipcRenderer.on('update', (_e, u) => cb(u)),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  // эфир в отдельном окне официального плеера VK (src — адрес video_ext.php)
+  openPlayer: (src, title) => ipcRenderer.invoke('player:open', { src, title }),
   // клик по уведомлению: раскрыть матч
   onOpenMatch: (cb) => ipcRenderer.on('open-match', (_e, m) => cb(m)),
-  // окно спрятано в трей
-  onToTray: (cb) => ipcRenderer.on('to-tray', () => cb()),
-  // окно плеера: «поверх всех окон»
-  setOnTop: (value) => ipcRenderer.invoke('player:on-top', value),
 });

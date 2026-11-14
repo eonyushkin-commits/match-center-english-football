@@ -60,17 +60,15 @@ function validTimeZone(tz) {
 export function createHandler({ settings, poller, fotmob, feed }) {
   const withLeagues = (s) => ({ ...s, knownLeagues: defaults.knownLeagues });
 
-  // Лента (Server-Sent Events): расписание дня date, состояние каналов и, если задан match,
-  // события этого матча — сразу и при каждом изменении. Подписка живёт, пока открыто соединение.
+  // Лента (Server-Sent Events): расписание дня date и состояние каналов — сразу и при каждом
+  // изменении. Подписка живёт, пока открыто соединение.
   function events(u, res) {
     const date = u.searchParams.get('date') || '';
     const tz = u.searchParams.get('tz') || 'Europe/Moscow';
-    const matchId = u.searchParams.get('match');
     if (!/^\d{8}$/.test(date)) throw new HttpError(400, 'date: нужен формат ГГГГММДД');
     if (!validTimeZone(tz)) throw new HttpError(400, 'tz: неизвестный часовой пояс');
-    if (matchId !== null && !/^\d{1,12}$/.test(matchId)) throw new HttpError(400, 'match: нужен номер матча FotMob');
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
-    res.on('close', feed.subscribe({ date, tz, matchId }, (event, json) => res.write(`event: ${event}\ndata: ${json}\n\n`)));
+    res.on('close', feed.subscribe({ date, tz }, (event, json) => res.write(`event: ${event}\ndata: ${json}\n\n`)));
   }
 
   const routes = {

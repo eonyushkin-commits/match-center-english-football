@@ -28,7 +28,7 @@ export function keepSection(secs, rowKey, hostKey) {
 }
 
 // Разделы списка: «Сейчас в эфире» (только сегодня) и турниры.
-// pinned — ключи строк с открытым плеером или подробностями: их не прячет никакой фильтр.
+// pinned — ключи строк с открытым плеером: их не прячет никакой фильтр.
 // byTime — матчи идут по времени начала, а не турнир за турниром в порядке из настроек.
 export function sections({ day, isToday, filters: f, q, pinned, byTime }) {
   q = q.trim().toLowerCase();
