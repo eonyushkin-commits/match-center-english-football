@@ -52,12 +52,6 @@ export function createFotmob(fetchImpl = fetch) {
     // все турниры с русскими названиями — для турниров, добавленных в настройках по номеру
     leagues: () => cached('leagues', 24 * 3600e3, () => getJson('https://www.fotmob.com/api/data/allLeagues?locale=ru',
       (j) => need(Array.isArray(j?.countries) && Array.isArray(j?.international), 'в справочнике турниров нет списков countries и international'))),
-    // подробности матча кэширует details.mjs
-    match: (id) => getJson(`https://www.fotmob.com/api/data/matchDetails?matchId=${encodeURIComponent(id)}`, (j) => {
-      need(isObject(j?.header?.status), 'у матча нет header.status');
-      const events = j.content?.matchFacts?.events;
-      need(events == null || Array.isArray(events.events), 'события матча — не список');
-    }),
     // «Обновить» по кнопке: расписание спросим заново, не дожидаясь срока. Полученное раньше
     // остаётся — его покажем, если FotMob не ответит.
     refresh() {

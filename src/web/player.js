@@ -36,12 +36,4 @@ import { embedUrl } from './format.mjs';
     });
   }
 
-  // «Поверх окон» есть только в приложении; в браузере окно обычное
-  const pin = document.getElementById('pin');
-  if (window.mc?.setOnTop) {
-    pin.hidden = false;
-    const set = async (value) => pin.setAttribute('aria-pressed', String(await window.mc.setOnTop(value)));
-    set(true);
-    pin.addEventListener('click', () => set(pin.getAttribute('aria-pressed') !== 'true'));
-  }
 })();

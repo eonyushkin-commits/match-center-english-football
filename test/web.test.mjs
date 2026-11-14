@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { keepSection, markFavorites, scoresHidden, sections } from '../src/web/filter.mjs';
 import { addDays, audience, embedUrl, esc, parseAliases, parseChannel, dateStrip, inDateRange } from '../src/web/format.mjs';
-import { detailsHtml, detailsToggleHtml, notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
+import { notices, rowHtml, statusBadge, updateHtml } from '../src/web/view.mjs';
 
 const stream = (o) => ({ status: 'started', channel: 'Sportcast', title: 'Челси — Арсенал', url: 'https://vkvideo.ru/video-1_2', embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h', ...o });
 const match = (o = {}) => ({
@@ -46,8 +46,8 @@ test('audience: зрители только у идущего эфира', () =>
   assert.equal(audience(stream({ spectators: 0 })), null);
 });
 
-test('embedUrl: только https-плеер VK, без __ref', () => {
-  assert.equal(embedUrl(stream({ embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h&__ref=x' })), 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h');
+test('embedUrl: только https-плеер VK, параметры официального адреса сохраняются', () => {
+  assert.equal(embedUrl(stream({ embed: 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h&__ref=x' })), 'https://vkvideo.ru/video_ext.php?oid=-1&id=2&hash=h&__ref=x');
   assert.equal(embedUrl(stream({ embed: 'http://vkvideo.ru/video_ext.php' })), null);
   assert.equal(embedUrl(stream({ embed: 'https://evil.example/vkvideo.ru' })), null);
   assert.equal(embedUrl(stream({ embed: 'не ссылка' })), null);
@@ -179,40 +179,16 @@ test('rowHtml: избранное и активный эфир, без кноп�
   assert.equal(html.match(/ active"/g).length, 1);
   assert.match(html, / active"\s+href="https:\/\/vkvideo\.ru\/video-1_3"/, 'подсвечен эфир с этой ссылкой, где бы он ни стоял');
   assert.doesNotMatch(html, /Подробнее/);
-  assert.doesNotMatch(html, /fotmob\.com\/match/, 'ссылка на FotMob — в подробностях');
+  assert.doesNotMatch(html, /fotmob\.com\/match/, 'ссылки на FotMob у матча нет');
+});
+
+test('rowHtml: в подсказке кнопки канала — заголовок эфира и Ctrl + клик', () => {
+  assert.match(row(match({ streams: [stream()] })), /title="Челси — Арсенал\nCtrl \+ клик — открыть в браузере/);
 });
 
 test('rowHtml экранирует названия из внешних источников', () => {
   const html = row(match({ home: { id: 1, name: '<img src=x onerror=alert(1)>' }, streams: [stream({ channel: '<b>', title: '"x"' })] }));
   assert.doesNotMatch(html, /<img src=x|<b>/);
-});
-
-// ---------- view: подробности ----------
-const lineups = { home: { starters: [{ number: 1, name: 'Санчес' }], subs: [{ number: 13, name: 'Йоргенсен' }], coach: 'Мареска', formation: '4-2-3-1' },
-  away: { starters: [{ number: 22, name: 'Райя' }], subs: [{ number: 1, name: 'Арризабалага' }] } };
-
-test('detailsHtml: без спойлеров события скрыты, пока не нажали «Показать»', () => {
-  const d = { data: { state: 'finished', events: [{ kind: 'goal', side: 'home', minute: 10, player: 'Палмер', score: [1, 0] }], lineups } };
-  assert.match(detailsHtml(match(), d, true), /События скрыты.*data-reveal="1"/);
-  assert.doesNotMatch(detailsHtml(match(), d, true), /Палмер/);
-  assert.match(detailsHtml(match(), d, false), /⚽.*1:0/s);
-});
-
-test('detailsHtml: загрузка, ошибка, матч не начался', () => {
-  assert.match(detailsHtml(match(), { data: null }, false), /Загрузка/);
-  assert.match(detailsHtml(match(), { error: 'HTTP 500' }, false), /Не удалось загрузить: HTTP 500/);
-  assert.match(detailsHtml(match(), { data: { state: 'upcoming', events: [] } }, false), /ещё не начался.*Составы появятся/s);
-});
-
-test('detailsHtml: ссылка на FotMob в углу напротив «События»', () => {
-  assert.match(detailsHtml(match(), { data: { state: 'finished', events: [], lineups: null } }, false),
-    /<div class="dhead"><h4>События<\/h4><a class="fm" href="https:\/\/www\.fotmob\.com\/match\/1"/);
-});
-
-test('detailsHtml: «Запасные» открыты у обеих команд сразу', () => {
-  const d = { data: { state: 'live', events: [], lineups } };
-  assert.equal(detailsHtml(match(), { ...d, subsOpen: true }, false).match(/<details open>/g).length, 2);
-  assert.equal(detailsHtml(match(), d, false).match(/<details open>/g), null);
 });
 
 // ---------- view: полосы и статус ----------
@@ -250,9 +226,4 @@ test('statusBadge: цвет точки по доле упавших канало
   assert.equal(statusBadge(vk([true, false])).cls, 'warn');
   assert.equal(statusBadge(vk([false, false])).cls, 'bad');
   assert.match(statusBadge(vk([true])).text, /^5 эфиров · /);
-});
-
-test('detailsToggleHtml: одна кнопка «События и составы» для плеера и для матча в окне', () => {
-  assert.match(detailsToggleHtml('live:7', true), /class="pmore on" data-details="live:7" aria-expanded="true">События и составы</);
-  assert.match(detailsToggleHtml('m:7', false), /class="pmore" data-details="m:7" aria-expanded="false"/);
 });

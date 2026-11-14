@@ -3,8 +3,6 @@
 //   101 — идёт, два эфира на разных каналах;
 //   102 — завершён, есть запись;
 //   103 — начнётся через два часа, эфиров нет.
-const details = require('../fixtures/fotmob-match-5795461.json');
-
 const MIN = 60e3;
 const TEAMS = { 1: ['Arsenal', 'Арсенал'], 2: ['Chelsea', 'Челси'], 3: ['Liverpool', 'Ливерпуль'], 4: ['Everton', 'Эвертон'], 5: ['Fulham', 'Фулхэм'], 6: ['Brentford', 'Брентфорд'] };
 const VK_TOKEN_DELAY_MS = 3000; // первое чтение каналов тянется: эфиры должны прийти на страницу сами, после расписания
@@ -24,11 +22,6 @@ function create(now = Date.now()) {
     CountryCodes: { ENG: 'Англия' },
   };
   const leagues = { international: [], countries: [{ ccode: 'RUS', localizedName: 'Россия', leagues: [{ id: 338, localizedName: 'ФНЛ' }] }] };
-
-  const matchDetails = (id) => {
-    const st = day.leagues[0].matches.find((m) => m.id === id)?.status;
-    return { ...details, header: { status: { utcTime: st?.utcTime, started: !!st?.started, finished: !!st?.finished } } };
-  };
 
   const sec = (ms) => Math.floor(ms / 1000);
   const video = (owner, id, title, o) => ({ owner_id: -owner, id, title, date: sec(now - 60 * MIN), player: `https://vkvideo.ru/video_ext.php?oid=-${owner}&id=${id}&hash=smoke`, ...o });
@@ -56,7 +49,6 @@ function create(now = Date.now()) {
       if (u.pathname === '/api/translationmapping') return json(names);
       if (u.pathname === '/api/data/matches') return json(day);
       if (u.pathname === '/api/data/allLeagues') return json(leagues);
-      if (u.pathname === '/api/data/matchDetails') return json(matchDetails(Number(u.searchParams.get('matchId'))));
     }
     if (u.hostname === 'login.vk.ru') {
       if (!tokenAsked) await new Promise((r) => setTimeout(r, VK_TOKEN_DELAY_MS));

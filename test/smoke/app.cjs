@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { create: fakeNet } = require('./fake-net.cjs');
+const playerHtml = require('./vk-player.cjs');
+const networkFetch = net.fetch.bind(net);
 
 const OUT = app.commandLine.getSwitchValue('smoke-out');
 const results = [];
@@ -39,6 +41,14 @@ async function step(name, fn) {
 
 app.on('quit', () => save({ quit: true }));
 app.whenReady().then(async () => {
+  // окно плеера открывает настоящий адрес VK — на его месте подставной плеер с API громкости
+  session.fromPartition('matchcenter').protocol.handle('https', (request) => {
+    const url = new URL(request.url);
+    if (url.hostname === 'vkvideo.ru' && url.pathname === '/video_ext.php') {
+      return new Response(playerHtml, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
+    return networkFetch(request, { bypassCustomProtocolHandlers: true });
+  });
   // сколько раз страница подписывалась на ленту
   let subscriptions = 0;
   session.fromPartition('matchcenter').webRequest.onBeforeRequest((d, cb) => {
@@ -51,6 +61,8 @@ app.whenReady().then(async () => {
   const on = (code, what, ms) => until(what || code, () => page(code), ms);
   const click = (selector) => page(`document.querySelector(${JSON.stringify(selector)}).click(), true`);
   const players = () => BrowserWindow.getAllWindows().filter((w) => w !== win);
+  const audioReady = (w, muted) => until('начальная громкость плеера', async () =>
+    !w.webContents.isAudioMuted() && await js(w, `window.playerState?.volume === 0.5 && window.playerState?.muted === ${muted}`));
   const frame = (w = win) => js(w, `document.querySelector('iframe')?.src ?? null`);
 
   await step('запуск в трей: окно скрыто, страница не подписана на ленту', async () => {
@@ -82,62 +94,56 @@ app.whenReady().then(async () => {
     await on(`!document.querySelector('#refresh').classList.contains('spin')`, 'значок перестал крутиться');
   });
 
-  await step('идущий эфир: плеер в строке матча, события под ним', async () => {
+  await step('идущий эфир открывается напрямую в защищённом окне VK: высокое качество, звук 50%', async () => {
     await click('[data-key="live:101"] .stream[data-play]');
-    await on(`!!document.querySelector('.player iframe')`, 'плеер');
-    assert.match(await frame(), /^https:\/\/vkvideo\.ru\/video_ext\.php\?oid=-1&id=1&/);
-    await on(`document.querySelectorAll('.details .ev').length > 0`, 'события матча');
+    await until('окно эфира', () => players().length === 1 && players()[0].webContents.getURL().includes('video_ext.php'));
+    const child = players()[0];
+    assert.match(child.webContents.getURL(), /oid=-1&id=1&/);
+    assert.equal(child.isAlwaysOnTop(), true);
+    assert.deepEqual(child.getContentSize(), [800, 450]); // 16:9 у видео, а не у окна с заголовком
+    assert.match(child.getTitle(), /Арсенал — Челси · Английский Акцент/);
+    const prefs = child.webContents.getLastWebPreferences();
+    assert.equal(prefs.nodeIntegration, false);
+    assert.equal(prefs.contextIsolation, true);
+    assert.equal(prefs.sandbox, true);
+    assert.equal(await js(child, `localStorage.getItem('vk_player_preferred_default_quality_settings')`), '{"type":"high_quality"}');
+    assert.equal(await js(child, 'window.qualityAtStart'), '{"type":"high_quality"}', 'настройка записана до скриптов плеера');
+    assert.equal(await js(child, 'typeof require + typeof process'), 'undefinedundefined');
+    const params = new URL(child.webContents.getURL()).searchParams;
+    assert.deepEqual([params.get('mute'), params.get('js_api'), params.get('autoplay')], ['0', '1', '1']);
+    await audioReady(child, false);
+    // начальная настройка не сбрасывает то, что потом выставили вручную
+    await js(child, `window.postMessage({method:'set_volume',volume:0.2},location.origin), true`);
+    await sleep(350);
+    assert.equal(await js(child, 'window.playerState.volume'), 0.2);
+    assert.equal(await frame(), null, 'в строке матча плеера нет');
   });
 
-  await step('клик по командам матча, который смотрят: эфир и события сворачиваются', async () => {
-    await click('[data-key="live:101"] .teams');
-    await on(`!document.querySelector('.player') && !document.querySelector('.details')`, 'плеер и события закрыты');
-    await click('[data-key="live:101"] .stream[data-play]');
-    await on(`!!document.querySelector('.player.open iframe') && !!document.querySelector('.details')`, 'плеер и события снова открыты');
-  });
-
-  await step('другой канал того же матча: плеер переключается на месте', async () => {
-    await click('[data-key="live:101"] .stream[data-play]:not(.active)');
-    await until('эфир второго канала', async () => /oid=-2&id=1&/.test(await frame()));
-    assert.equal(await page(`document.querySelectorAll('.player').length`), 1);
-  });
-
-  await step('«В окне»: эфир уходит в отдельное окно, кнопка «События и составы» остаётся в строке', async () => {
-    await click('.player .popout');
-    await until('окно плеера', () => players().length === 1 && !players()[0].webContents.isLoading());
-    assert.match(await frame(players()[0]), /oid=-2&id=1&.*&autoplay=1&mute=0$/); // идущий эфир в окне запускается сам
-    assert.deepEqual(players()[0].getContentSize(), [800, 450]); // 16:9 у видео, а не у окна с заголовком
-    assert.match(players()[0].getTitle() + await js(players()[0], 'document.title'), /Арсенал — Челси · АПЛ Навсегда/);
-    await on(`!document.querySelector('.player.open')`, 'плеер в строке закрыт');
-    const toggle = '.popbar [data-details="live:101"]';
-    assert.equal(await page(`document.querySelector(${JSON.stringify(toggle)}).getAttribute('aria-expanded')`), 'true');
-    await click(toggle);
-    await on(`!document.querySelector('.details')`, 'события свёрнуты');
-    await click(toggle);
-    await on(`!!document.querySelector('.details')`, 'события раскрыты');
-  });
-
-  await step('запись: открывается с начала', async () => {
+  await step('следующие окна — без звука; звук в них включается вручную', async () => {
     await click('[data-key="m:102"] .stream[data-play]');
-    await until('плеер записи', async () => /oid=-1&id=2&/.test(await frame() || ''));
-    assert.match(await frame(), /hash=smoke&js_api=1$/); // без t=; js_api — плеер сообщает позицию для «В окне»
+    await until('два окна', () => players().length === 2 && players().some((w) => /id=2&/.test(w.webContents.getURL())));
+    const second = players().find((w) => /id=2&/.test(w.webContents.getURL()));
+    await audioReady(second, true);
+    assert.equal(new URL(second.webContents.getURL()).searchParams.get('mute'), '1');
+    await click('[data-key="live:101"] .stream[data-play]:nth-of-type(2)');
+    await until('три окна', () => players().length === 3 && players().some((w) => /oid=-2&id=1&/.test(w.webContents.getURL())));
+    const third = players().find((w) => /oid=-2&id=1&/.test(w.webContents.getURL()));
+    await audioReady(third, true);
+    await js(second, `window.postMessage({method:'unmute'},location.origin), true`);
+    await sleep(350);
+    assert.equal(await js(second, 'window.playerState.muted'), false, 'звук можно включить в VK');
+    assert.equal(await js(third, 'window.playerState.muted'), true, 'третье окно остаётся без звука');
+    second.close();
+    third.close();
+    await until('осталось окно эфира', () => players().length === 1);
   });
 
-  await step('второе окно плеера открывается рядом с первым', async () => {
-    await click('.player .popout');
-    await until('два окна плеера', () => players().length === 2 && players().every((w) => !w.webContents.isLoading()));
-    const frames = await Promise.all(players().map((w) => frame(w)));
-    assert.deepEqual(frames.map((src) => /oid=-(\d)&id=(\d)/.exec(src).slice(1).join('_')).sort(), ['1_2', '2_1']);
-  });
-
-  await step('окно с записью закрыли: запись возвращается в строку матча и запускается сама', async () => {
-    await on(`!document.querySelector('.player')`, 'плеер в строке закрыт');
-    for (const w of players()) if (/id=2&/.test(await frame(w))) w.close();
-    await until('осталось одно окно', () => players().length === 1);
-    await until('плеер записи в строке', async () => /oid=-1&id=2&/.test(await frame() || ''));
-    assert.match(await frame(), /hash=smoke&js_api=1&autoplay=1&mute=0$/);
-    assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'm:102');
-    assert.equal(await page(`!!document.querySelector('.popbar [data-details="m:102"]')`), false);
+  await step('после закрытия всех плееров новое окно снова со звуком 50%', async () => {
+    for (const w of players()) w.close();
+    await until('все плееры закрыты', () => players().length === 0);
+    await click('[data-key="live:101"] .stream[data-play]');
+    await until('новое первое окно', () => players().length === 1);
+    await audioReady(players()[0], false);
   });
 
   await step('окна не уходят на чужой сайт: такая ссылка открывается в браузере', async () => {
@@ -164,18 +170,18 @@ app.whenReady().then(async () => {
     const { localYmd } = await import('../../src/core/day.mjs');
     win.showInactive(); // как openMatch в main.cjs: показать окно и попросить страницу раскрыть матч
     win.webContents.send('open-match', { date: localYmd(new Date()), id: 101 });
-    await until('плеер идущего матча', async () => /id=1&/.test(await page(`document.querySelector('.player.open iframe')?.src ?? ''`)));
-    assert.equal(await page(`document.querySelector('.player').previousElementSibling.dataset.key`), 'live:101');
+    await until('окно из уведомления', () => players().length === 2);
+    assert.match(players().at(-1).webContents.getURL(), /oid=-1&id=1&/);
+    assert.equal(win.isVisible(), true);
   });
 
-  await step('крестик прячет окно в трей: приложение работает, плеер и лента закрыты, лента открывается при показе', async () => {
+  await step('крестик прячет окно в трей: приложение работает, лента закрыта и открывается при показе', async () => {
     for (const w of players()) w.destroy();
-    assert.equal(await page(`!!document.querySelector('.player iframe')`), true, 'перед закрытием плеер открыт');
+    assert.equal(await frame(), null);
     win.close();
     await sleep(500);
     assert.equal(win.isDestroyed(), false);
     assert.equal(win.isVisible(), false);
-    assert.equal(await page(`!!document.querySelector('.player iframe')`), false, 'плеер закрыт');
     const before = subscriptions;
     win.showInactive();
     await until('новая подписка при показе', () => subscriptions === before + 1);

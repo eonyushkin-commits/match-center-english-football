@@ -7,10 +7,12 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { keepContentRatio } = require('./aspect.cjs');
 const { dataDir } = require('./data-dir.cjs');
+const { configurePlayerAudio } = require('./player-audio.cjs');
 
 const APP_ID = 'ru.sportcenter.matchcenter';
 const TITLE = 'Матч-центр | Английский футбол';
 const PRELOAD = path.join(__dirname, 'preload.cjs');
+const PLAYER_PRELOAD = path.join(__dirname, 'preload-player.cjs');
 const ICON = path.join(__dirname, 'icon.png');
 const RELEASES = 'https://github.com/eonyushkin-commits/match-center-english-football/releases';
 const load = (file) => import(pathToFileURL(path.join(__dirname, '..', file)).href);
@@ -42,6 +44,7 @@ if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', dataDir
 let win = null;
 let mc = null;
 let tray = null;
+const playerWindows = new Set(); // открытые окна плеера: первое — со звуком, остальные — без
 let quitting = false; // true — выходим по-настоящему, а не прячемся в трей
 const startHidden = process.argv.includes('--hidden'); // автозапуск с Windows — сразу в трей
 const notifications = new Set(); // держим ссылки, иначе на Windows клик по уведомлению теряется
@@ -71,6 +74,49 @@ function notify({ title, body, onClick }) {
   n.show();
 }
 
+// Страница остаётся на своих адресах (allow): переход на чужой и новые окна уходят во внешний браузер
+function guardNavigation(contents, allow) {
+  contents.setWindowOpenHandler(({ url }) => {
+    openExternal(url);
+    return { action: 'deny' };
+  });
+  contents.on('will-navigate', (e, url) => {
+    if (allow(url)) return;
+    e.preventDefault();
+    openExternal(url);
+  });
+}
+
+// ---------- окно плеера ----------
+// VK отказывает встроенному iframe на локальной странице («видео не показывается»), поэтому
+// официальный плеер video_ext.php открывается самостоятельной страницей в своём окне.
+// Первое окно — со звуком, следующие при уже открытых — без (см. player-audio.cjs).
+function openPlayerWindow(src, title) {
+  let source;
+  try { source = new URL(src); } catch { return; }
+  if (source.protocol !== 'https:' || !/^(vkvideo\.ru|vk\.com|vk\.ru)$/.test(source.hostname) || source.pathname !== '/video_ext.php') return;
+  const muted = playerWindows.size > 0;
+  source.searchParams.set('autoplay', '1');
+  source.searchParams.set('js_api', '1');
+  source.searchParams.set('mute', muted ? '1' : '0');
+  const player = new BrowserWindow({
+    icon: ICON,
+    width: 800, height: 450, minWidth: 320, minHeight: 180, useContentSize: true,
+    alwaysOnTop: true, backgroundColor: '#000', autoHideMenuBar: true,
+    title: String(title || 'Трансляция'),
+    // preload лишь задаёт высокое качество по умолчанию и ничего не открывает странице VK
+    webPreferences: { partition: 'matchcenter', nodeIntegration: false, contextIsolation: true, sandbox: true, preload: PLAYER_PRELOAD },
+  });
+  playerWindows.add(player);
+  player.once('closed', () => playerWindows.delete(player));
+  // в заголовке — матч и канал, а не <title> страницы VK: так окна легко различить
+  player.on('page-title-updated', (e) => e.preventDefault());
+  configurePlayerAudio(player.webContents, { muted, url: source.href });
+  keepContentRatio(player, 16 / 9); // видео занимает окно целиком, без чёрных полос
+  guardNavigation(player.webContents, (url) => url === source.href);
+  player.loadURL(source.href).catch((e) => console.error('VK player:', e.message));
+}
+
 // ---------- окно ----------
 async function start() {
   const [{ createMatchCenter }, { pageReader }] = await Promise.all([
@@ -96,8 +142,8 @@ async function start() {
     title: `${TITLE} · v${app.getVersion()}`,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1116' : '#f3f5f8',
     autoHideMenuBar: true,
-    // Сессия только в памяти: вход в VK внутри плеера не сохранится между запусками —
-    // залогиненному пользователю VK отвечает на встроенные трансляции «Видео недоступно».
+    // Сессия VK только в памяти: вход не сохраняется между запусками —
+    // залогиненному пользователю VK часто отвечает на трансляции «Видео недоступно».
     // Тема, фильтры и избранное хранятся в настройках приложения, а не в браузере.
     webPreferences: { partition: 'matchcenter', spellcheck: false, preload: PRELOAD },
   });
@@ -105,41 +151,8 @@ async function start() {
   win.on('page-title-updated', (e) => e.preventDefault()); // заголовок с версией, а не <title> страницы
   if (!toTray) win.once('ready-to-show', () => win.show());
 
-  // Своя страница плеера открывается отдельным окном приложения, всё остальное — во внешнем браузере
-  const playerPage = `${mc.url}/player.html`;
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(playerPage)) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 800, height: 450, minWidth: 320, minHeight: 180, useContentSize: true, alwaysOnTop: true,
-          backgroundColor: '#000000', autoHideMenuBar: true, icon: ICON,
-          // мост с приложением («Поверх окон») сам в новое окно не переходит
-          webPreferences: { partition: 'matchcenter', preload: PRELOAD },
-        },
-      };
-    }
-    openExternal(url);
-    return { action: 'deny' };
-  });
-  // Окно приложения не уходит на чужую страницу (например, если плеер VK попробует открыть свой
-  // сайт на месте окна) — такая ссылка открывается в браузере
-  const keepLocal = (contents) => contents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(mc.url)) {
-      e.preventDefault();
-      openExternal(url);
-    }
-  });
-  win.webContents.on('did-create-window', (child) => {
-    child.setMenuBarVisibility(false);
-    keepContentRatio(child, 16 / 9); // видео занимает окно целиком, без чёрных полос
-    child.webContents.setWindowOpenHandler(({ url }) => {
-      openExternal(url);
-      return { action: 'deny' };
-    });
-    keepLocal(child.webContents);
-  });
-  keepLocal(win.webContents);
+  // окно приложения не уходит со своей страницы: чужие ссылки и новые окна — во внешнем браузере
+  guardNavigation(win.webContents, (url) => url.startsWith(mc.url));
 
   // размер и положение сохраняем по ходу дела — закрытию окна ничего ждать не нужно
   let boundsTimer = null;
@@ -157,7 +170,6 @@ async function start() {
     if (quitting || !mc.settings.get().tray) return;
     e.preventDefault();
     win.hide();
-    win.webContents.send('to-tray'); // страница закроет плеер
     if (!mc.settings.get().ui.trayHintShown) {
       notify({ title: 'Матч-центр работает в трее', body: 'Уведомления о матчах избранных команд продолжат приходить. Выйти — правой кнопкой по значку в трее.', onClick: showWindow });
       mc.settings.update({ ui: { trayHintShown: true } }).catch(() => {});
@@ -237,6 +249,10 @@ function setupUpdates() {
 }
 
 ipcMain.handle('update:get', () => update);
+// эфир в окне плеера VK — только по просьбе главной страницы
+ipcMain.handle('player:open', (e, { src, title } = {}) => {
+  if (e.sender === win?.webContents) openPlayerWindow(src, title);
+});
 ipcMain.handle('update:download', () => {
   if (!updater || !['available', 'error'].includes(update.state)) return;
   setUpdate({ ...update, state: 'downloading', percent: 0 });
@@ -246,11 +262,6 @@ ipcMain.handle('update:install', () => {
   if (update.state !== 'ready') return;
   quitting = true;
   updater.quitAndInstall(true, true); // тихо поставить и сразу открыть новую версию
-});
-ipcMain.handle('player:on-top', (e, value) => {
-  const w = BrowserWindow.fromWebContents(e.sender);
-  if (w && w !== win) w.setAlwaysOnTop(!!value);
-  return w?.isAlwaysOnTop();
 });
 
 async function checkUpdatesNow() {

@@ -1,12 +1,12 @@
 // Главная страница: состояние, лента с сервера, плеер и обработчики. Разметка — в view.mjs,
-// что показывать — в filter.mjs, что раскрыто — в opened.mjs, форматирование — в format.mjs:
+// что показывать — в filter.mjs, какой плеер открыт — в opened.mjs, форматирование — в format.mjs:
 // они без DOM и покрыты тестами.
 import { reconcile, setHtml } from './dom.mjs';
 import { keepSection, markFavorites as mark, scoresHidden, sections as buildSections } from './filter.mjs';
 import { addDays, dateStrip, embedUrl, esc, inDateRange, matchTitle, parseYmd, withTime, ymd } from './format.mjs';
 import { createOpened, matchIdOf } from './opened.mjs';
 import { openSettingsDialog } from './settings-ui.mjs';
-import { detailsHtml, detailsToggleHtml, emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
+import { emptyHtml, notices, popoverHtml, rowHtml, sectionHeadHtml, statusBadge, updateKey } from './view.mjs';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -26,7 +26,7 @@ const state = {
   update: null, // обновление приложения (только в приложении): { state, version, percent, notes, error }
   updateDismissed: null, // «версия:шаг» скрытой крестиком полосы обновления — до следующего шага или перезапуска
 };
-const opened = createOpened(); // плеер, события и составы, матчи «в окне»
+const opened = createOpened(); // встроенный плеер (только в браузере)
 let playerEl = null;
 
 // режим без спойлеров: счёт скрыт, пока его не попросят показать
@@ -45,15 +45,14 @@ async function request(method, url, { body } = {}) {
 }
 
 // ---------- лента ----------
-// Страница не опрашивает сервер. Она подписана на выбранный день и раскрытый матч, а приложение
-// само присылает расписание, состояние каналов и события матча — сразу и при каждом изменении.
-// Сменился день или раскрытый матч — подписка открывается заново; скрытое окно не подписано.
+// Страница не опрашивает сервер. Она подписана на выбранный день, а приложение само присылает
+// расписание и состояние каналов — сразу и при каждом изменении.
+// Сменился день — подписка открывается заново; скрытое окно не подписано.
 let feed = null; // EventSource текущей подписки
 let arrival = null; // { promise, resolve }: выполнится, когда придёт расписание (или ошибка) текущей подписки
 function subscribe() {
   feed?.close();
   const q = new URLSearchParams({ date: state.date, tz });
-  if (opened.details) q.set('match', matchIdOf(opened.details.rowKey));
   const es = (feed = new EventSource(`/api/events?${q}`));
   $('#refresh').classList.add('spin');
 
@@ -79,19 +78,6 @@ function subscribe() {
     got(null);
   }));
   es.addEventListener('day-error', data(({ message }) => got(message)));
-  es.addEventListener('details', data((details) => {
-    const d = opened.details;
-    if (!d) return;
-    d.data = details;
-    d.error = null;
-    renderList();
-  }));
-  es.addEventListener('details-error', data(({ message }) => {
-    const d = opened.details;
-    if (!d || d.data) return; // уже показанные события разовый сбой не стирает
-    d.error = message;
-    renderList();
-  }));
   // оборвалась — EventSource переподключается сам; отказал совсем — пробуем заново
   es.onerror = () => {
     if (es.readyState !== EventSource.CLOSED) return;
@@ -259,13 +245,6 @@ function renderList() {
     },
   })));
   const view = { favIds: favoriteIds(), hidden: isHidden, player: opened.player };
-  // кнопка «События и составы» под плеером показывает, раскрыты ли они
-  const pmore = playerEl?.querySelector('.pmore');
-  if (pmore) {
-    const open = !!opened.player && opened.details?.rowKey === opened.player.rowKey;
-    pmore.classList.toggle('on', open);
-    pmore.setAttribute('aria-expanded', String(open));
-  }
   const nodes = new Map([...list.children].map((n) => [n.dataset.key, n]));
   for (const s of secs) {
     const node = nodes.get(s.key);
@@ -273,31 +252,10 @@ function renderList() {
     const items = [];
     for (const r of s.rows) {
       items.push({ key: r.key, cls: `match${r.m.favorite ? ' fav' : ''}`, html: rowHtml(r, view) });
-      for (const what of opened.under(r.key)) items.push(under[what](r));
+      if (r.key === opened.player?.rowKey) items.push({ key: 'player', node: playerEl, fixed: true });
     }
     reconcile(node.lastElementChild, items);
   }
-}
-
-// что идёт под строкой матча (см. opened.under)
-const under = {
-  player: () => ({ key: 'player', node: playerEl, fixed: true }),
-  popbar: (r) => ({ key: `pop:${r.key}`, cls: 'popbar', html: detailsToggleHtml(r.key, opened.details?.rowKey === r.key) }),
-  details: (r) => ({ key: 'details', cls: 'details', html: detailsHtml(r.m, opened.details, isHidden(r.m)) }),
-};
-
-// ---------- события и составы ----------
-function toggleDetails(rowKey) {
-  opened.toggleDetails(rowKey);
-  renderList();
-  subscribe(); // события матча приходят лентой, пока они раскрыты
-}
-
-function closeRow(rowKey) {
-  const hadDetails = opened.details?.rowKey === rowKey;
-  if (hadDetails) opened.toggleDetails(rowKey);
-  closePlayer();
-  if (hadDetails) subscribe(); // события матча больше не нужны
 }
 
 // ---------- панель каналов ----------
@@ -351,6 +309,12 @@ function openPlayer(rowKey, url, resume = null) {
   const found = streamOf(rowKey, url);
   if (!found) return;
   const { m, s, embed } = found;
+  // В приложении VK не показывает видео во встроенном iframe локальной страницы, поэтому эфир
+  // открывается официальным плеером VK в отдельном окне (см. main.cjs). Окон может быть несколько.
+  if (window.mc) {
+    window.mc.openPlayer(embed, `${matchTitle(m)} · ${s.channel}`);
+    return;
+  }
   position = resume?.position ?? null;
   const src = `${withTime(embed, position)}${s.status === 'finished' ? '&js_api=1' : ''}${resume ? '&autoplay=1&mute=0' : ''}`;
   const sameRow = playerEl && opened.player?.rowKey === rowKey;
@@ -373,18 +337,12 @@ function openPlayer(rowKey, url, resume = null) {
       <button type="button" class="btn popout" title="Смотреть в отдельном окне — можно открыть несколько матчей сразу">⧉ В окне</button>
       <button type="button" class="icon-btn close" title="Закрыть (Esc)" aria-label="Закрыть плеер"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="frame"><iframe src="${esc(src)}" title="Плеер VK" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock"></iframe></div>
-    ${detailsToggleHtml(rowKey, false)}
   </div></div>`;
   const frame = el.querySelector('iframe');
   frame.addEventListener('load', () => frame.contentWindow.postMessage({ method: 'init' }, new URL(frame.src).origin));
   el.addEventListener('transitionend', (e) => {
     if (e.target === el && e.propertyName === 'grid-template-rows' && el.classList.contains('open')) centerPlayer(el);
   });
-  // события и составы сразу под трансляцией; в режиме без спойлеров — только по кнопке под плеером
-  if (!state.settings?.ui.hideScores && opened.details?.rowKey !== rowKey) {
-    opened.toggleDetails(rowKey);
-    subscribe();
-  }
   render();
   requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('open')));
 }
@@ -427,8 +385,7 @@ function popOut() {
   const q = new URLSearchParams({ src, url: withTime(s.url, position), title: `${matchTitle(m)} · ${s.channel}` });
   const w = window.open(`player.html?${q}`, '_blank', 'popup,width=800,height=450');
   if (w) watchPopout(w, { rowKey: p.rowKey, url: p.url, position });
-  opened.popOut(); // в двух местах сразу один эфир не нужен
-  closePlayer();
+  closePlayer(); // в двух местах сразу один эфир не нужен
 }
 
 // Окно «В окне» закрыли — эфир возвращается в строку своего матча и идёт дальше.
@@ -438,10 +395,8 @@ function watchPopout(w, what) {
     if (!w.closed) return;
     clearInterval(timer);
     popouts.delete(w);
-    opened.closePopOut(what.rowKey);
-    // не возвращаем, если в приложении уже смотрят другой эфир или его окно скрыто (звук шёл бы без окна)
-    if (opened.player || document.hidden) renderList();
-    else openPlayer(what.rowKey, what.url, { position: what.position });
+    // не возвращаем, если в браузере уже смотрят другой эфир или вкладка скрыта (звук шёл бы без окна)
+    if (!opened.player && !document.hidden) openPlayer(what.rowKey, what.url, { position: what.position });
   }, 400);
 }
 
@@ -459,8 +414,6 @@ async function openMatchFromNotification(date, id) {
   setTimeout(() => row?.classList.remove('flash'), 1700);
 }
 window.mc?.onOpenMatch(({ date, id }) => openMatchFromNotification(date, id));
-// окно убрали в трей — эфир в нём больше не смотрят: иначе звук шёл бы без окна
-window.mc?.onToTray(() => { if (opened.player) closePlayer(true); });
 
 // ---------- настройки ----------
 // Названия турниров, добавленных по номеру: спрашиваем заранее, при запуске, чтобы диалог
@@ -490,7 +443,6 @@ function setDate(d) {
   state.date = d;
   state.day = null;
   state.error = null;
-  opened.leaveDay();
   closePlayer(true);
   renderDates();
   scrollTo({ top: 0 });
@@ -552,13 +504,9 @@ $('#list').addEventListener('click', (e) => {
   }
   if (e.target.closest('.player .close')) { closePlayer(); return; }
   if (e.target.closest('.player .popout')) { popOut(); return; }
-  // клик по названиям команд или кнопка «События и составы» (под плеером или у матча в окне)
-  const more = e.target.closest('[data-details]');
-  if (more || e.target.closest('.match .teams')) {
-    const rowKey = more ? more.dataset.details : e.target.closest('[data-key]').dataset.key;
-    // клик по командам матча, который смотрят, сворачивает всё: и эфир, и события
-    if (!more && opened.player?.rowKey === rowKey) closeRow(rowKey);
-    else toggleDetails(rowKey);
+  // клик по командам матча, который смотрят, закрывает плеер
+  if (e.target.closest('.match .teams')) {
+    if (opened.player?.rowKey === e.target.closest('[data-key]').dataset.key) closePlayer();
     return;
   }
   const a = e.target.closest('[data-play]');
@@ -573,15 +521,6 @@ $('#list').addEventListener('click', (e) => {
   if (opened.isPlaying(rowKey, s.url)) { closePlayer(); return; }
   openPlayer(rowKey, s.url);
 });
-
-// «Запасные» раскрываются у обеих команд сразу и остаются раскрытыми при обновлении событий.
-// Событие toggle не всплывает — ловим на погружении.
-$('#list').addEventListener('toggle', (e) => {
-  if (!e.target.matches?.('.lu details')) return;
-  const open = e.target.open;
-  if (opened.details) opened.details.subsOpen = open;
-  for (const d of e.target.closest('.lineups').querySelectorAll('details')) if (d.open !== open) d.open = open;
-}, true);
 
 document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-action]')?.dataset.action;

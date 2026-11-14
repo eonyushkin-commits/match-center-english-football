@@ -7,8 +7,8 @@ import { resolve } from '../src/core/settings.mjs';
 
 const pause = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 
-function setup({ dayMs = 1e9, detailsMs = 1e9, retryMs = 1e9 } = {}) {
-  const state = { score: 0, streams: [], fail: null, detailsFail: null, user: {}, calls: 0, detailsCalls: 0 };
+function setup({ dayMs = 1e9, retryMs = 1e9 } = {}) {
+  const state = { score: 0, streams: [], fail: null, user: {}, calls: 0 };
   const poller = Object.assign(new EventEmitter(), { snapshot: () => ({ ready: true, channels: [], streams: state.streams }) });
   const settings = Object.assign(new EventEmitter(), { warnings: [], get: () => resolve(state.user) });
   const fotmob = {
@@ -19,34 +19,20 @@ function setup({ dayMs = 1e9, detailsMs = 1e9, retryMs = 1e9 } = {}) {
       return { leagues: [{ id: 47, name: 'PL', matches: [{ id: 7, home: { id: 1, name: 'Fulham', score: state.score }, away: { id: 2, name: 'Arsenal', score: 0 }, status: { utcTime: '2026-09-20T15:00:00Z', started: true } }] }] };
     },
   };
-  const details = async (id) => {
-    state.detailsCalls++;
-    if (state.detailsFail) throw new Error(state.detailsFail);
-    return { id, goals: state.score };
-  };
-  const feed = createFeed({ settings, poller, fotmob, details, version: 'v', dayMs, detailsMs, retryMs });
+  const feed = createFeed({ settings, poller, fotmob, version: 'v', dayMs, retryMs });
   const log = [];
-  const sub = (watch = {}) => feed.subscribe({ date: '20260920', tz: 'UTC', ...watch }, (event, json) => log.push([event, JSON.parse(json)]));
+  const sub = () => feed.subscribe({ date: '20260920', tz: 'UTC' }, (event, json) => log.push([event, JSON.parse(json)]));
   return { state, poller, settings, feed, log, sub, names: () => log.map(([e]) => e) };
 }
 
-test('подписка сразу получает состояние каналов, расписание и события раскрытого матча', async () => {
-  const t = setup();
-  const stop = t.sub({ matchId: '7' });
-  await pause();
-  stop();
-  assert.deepEqual(t.names().sort(), ['day', 'details', 'status']);
-  assert.equal(t.log.find(([e]) => e === 'status')[1].version, 'v');
-  assert.equal(t.log.find(([e]) => e === 'day')[1].leagues[0].matches[0].home.name, 'Fulham');
-  assert.deepEqual(t.log.find(([e]) => e === 'details')[1], { id: '7', goals: 0 });
-});
-
-test('без раскрытого матча события не запрашиваются', async () => {
+test('подписка сразу получает состояние каналов и расписание', async () => {
   const t = setup();
   const stop = t.sub();
   await pause();
   stop();
   assert.deepEqual(t.names().sort(), ['day', 'status']);
+  assert.equal(t.log.find(([e]) => e === 'status')[1].version, 'v');
+  assert.equal(t.log.find(([e]) => e === 'day')[1].leagues[0].matches[0].home.name, 'Fulham');
 });
 
 test('по часам присылается только изменившееся: счёт поменялся — расписание, нет — ничего', async () => {
@@ -121,13 +107,4 @@ test('после отписки ничего не приходит и ядро �
   t.sub();
   t.feed.close();
   assert.equal(t.poller.listenerCount('update'), 0);
-});
-
-test('события раскрытого матча спрашиваются чаще расписания', async () => {
-  const t = setup({ detailsMs: 15 });
-  const stop = t.sub({ matchId: '7' });
-  await pause(60);
-  stop();
-  assert.equal(t.state.calls, 1, 'расписание — один раз');
-  assert.ok(t.state.detailsCalls >= 3, `события — по своим часам (${t.state.detailsCalls})`);
 });

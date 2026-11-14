@@ -15,9 +15,6 @@
   .bar:hover, .bar:focus-within { opacity: 1; }
   .bar b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar a { color: #9cc0ff; text-decoration: none; white-space: nowrap; }
-  .bar button { border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.35); color: #fff; border-radius: 7px;
-    padding: 3px 9px; font: inherit; cursor: pointer; white-space: nowrap; }
-  .bar button[aria-pressed="true"] { background: #1f6fff; border-color: #1f6fff; }
   .error { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; }
 </style>
 </head>
@@ -25,7 +22,6 @@
 <div class="bar">
   <b id="title"></b>
   <a id="ext" target="_blank" rel="noopener">Открыть в VK ↗</a>
-  <button id="pin" type="button" hidden title="Окно поверх остальных">Поверх окон</button>
 </div>
 <script type="module" src="player.js"></script>
 </body>
