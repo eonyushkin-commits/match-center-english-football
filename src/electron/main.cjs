@@ -14,7 +14,7 @@ const TITLE = 'Матч-центр | Английский футбол';
 const PRELOAD = path.join(__dirname, 'preload.cjs');
 const PLAYER_PRELOAD = path.join(__dirname, 'preload-player.cjs');
 const ICON = path.join(__dirname, 'icon.png');
-const RELEASES = 'https://github.com/eonyushkin-commits/match-center-english-football/releases';
+const RELEASES = 'https://github.com/eonyushkin-commits/match-center/releases';
 const load = (file) => import(pathToFileURL(path.join(__dirname, '..', file)).href);
 
 // во внешний браузер отдаём только обычные веб-ссылки
